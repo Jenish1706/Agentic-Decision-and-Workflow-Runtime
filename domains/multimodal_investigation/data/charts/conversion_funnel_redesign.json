@@ -1,0 +1,39 @@
+{
+  "artifact_id": "CHART-FUNNEL-Q3",
+  "chart_type": "funnel_bar_chart",
+  "title": "Redesigned Checkout Step-by-Step Drop-Off Visual Audit",
+  "cohort": "Mobile Web Users (Q3 Post-Redesign)",
+  "stages": [
+    {
+      "step_order": 1,
+      "step_name": "Landing / Product Page",
+      "visitors": 50000,
+      "dropoff_from_previous_pct": 0.0,
+      "retention_from_start_pct": 100.0
+    },
+    {
+      "step_order": 2,
+      "step_name": "Cart Review",
+      "visitors": 21000,
+      "dropoff_from_previous_pct": 58.0,
+      "retention_from_start_pct": 42.0
+    },
+    {
+      "step_order": 3,
+      "step_name": "Payment Info Entered",
+      "visitors": 16800,
+      "dropoff_from_previous_pct": 20.0,
+      "retention_from_start_pct": 33.6
+    },
+    {
+      "step_order": 4,
+      "step_name": "Order Confirmed & Paid",
+      "visitors": 15960,
+      "dropoff_from_previous_pct": 5.0,
+      "retention_from_start_pct": 31.92
+    }
+  ],
+  "overall_conversion_rate_pct": 31.92,
+  "biggest_dropoff_step": "Cart Review",
+  "biggest_dropoff_pct": 58.0
+}

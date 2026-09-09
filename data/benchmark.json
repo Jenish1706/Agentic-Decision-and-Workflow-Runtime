@@ -1,0 +1,244 @@
+[
+  {
+    "id": "q01",
+    "question": "What is the default per-tenant rate limit for Aurora event ingestion?",
+    "category": "pure_document",
+    "difficulty": "easy",
+    "expected_doc_ids": [
+      "arch-aurora",
+      "api-aurora",
+      "faq-rate-limits"
+    ],
+    "expected_answer": "5,000 events per second per tenant",
+    "expected_tool": null
+  },
+  {
+    "id": "q02",
+    "question": "How long is an Anchor access token valid before it expires?",
+    "category": "pure_document",
+    "difficulty": "easy",
+    "expected_doc_ids": [
+      "arch-anchor",
+      "api-anchor",
+      "faq-token-expiry"
+    ],
+    "expected_answer": "15 minutes",
+    "expected_tool": null
+  },
+  {
+    "id": "q03",
+    "question": "What caused the March 2026 Aurora outage and how was it fixed?",
+    "category": "pure_document",
+    "difficulty": "medium",
+    "expected_doc_ids": [
+      "postmortem-2026-03-aurora-outage"
+    ],
+    "expected_answer": "A deploy introduced a second ingestion path that skipped the per-tenant rate cap, causing a ring buffer overflow; fixed by re-enabling the cap and adding a buffer-occupancy alert.",
+    "expected_tool": null
+  },
+  {
+    "id": "q04",
+    "question": "What are the RTO and RPO for a Cascade database failover?",
+    "category": "pure_document",
+    "difficulty": "medium",
+    "expected_doc_ids": [
+      "runbook-db-failover"
+    ],
+    "expected_answer": "RTO of 5 minutes and RPO of 30 seconds",
+    "expected_tool": null
+  },
+  {
+    "id": "q05",
+    "question": "How many times does Lighthouse retry a failed notification before giving up?",
+    "category": "pure_document",
+    "difficulty": "easy",
+    "expected_doc_ids": [
+      "arch-lighthouse",
+      "api-lighthouse"
+    ],
+    "expected_answer": "3 retries with exponential backoff, then it is dead-lettered",
+    "expected_tool": null
+  },
+  {
+    "id": "q06",
+    "question": "According to policy, how many approvals does a production database migration need, and from whom?",
+    "category": "pure_document",
+    "difficulty": "hard",
+    "expected_doc_ids": [
+      "policy-deploy-approval"
+    ],
+    "expected_answer": "2 approvals, at least one from the data team (Nimbus-Data)",
+    "expected_tool": null
+  },
+  {
+    "id": "q07",
+    "question": "Which team owns the Ferry service?",
+    "category": "structured_record",
+    "difficulty": "easy",
+    "expected_doc_ids": [],
+    "expected_record_ids": [
+      "ferry"
+    ],
+    "expected_answer": "Nimbus-Data",
+    "expected_tool": "lookup_record"
+  },
+  {
+    "id": "q08",
+    "question": "What tier is the Compass service, and what uptime SLO does that imply?",
+    "category": "structured_record",
+    "difficulty": "medium",
+    "expected_doc_ids": [
+      "faq-slo-targets"
+    ],
+    "expected_record_ids": [
+      "compass"
+    ],
+    "expected_answer": "Tier 1, 99.9% uptime SLO",
+    "expected_tool": "lookup_record"
+  },
+  {
+    "id": "q09",
+    "question": "What is Beacon's uptime SLO percentage?",
+    "category": "structured_record",
+    "difficulty": "easy",
+    "expected_doc_ids": [],
+    "expected_record_ids": [
+      "beacon"
+    ],
+    "expected_answer": "99.5%",
+    "expected_tool": "lookup_record"
+  },
+  {
+    "id": "q10",
+    "question": "A Tier 1 service has an uptime SLO of 99.9%, which allows about 43 minutes of downtime per month. If Aurora has already used 17 minutes this month, how many minutes of downtime budget remain?",
+    "category": "tool_arithmetic",
+    "difficulty": "easy",
+    "expected_doc_ids": [
+      "faq-slo-targets"
+    ],
+    "expected_record_ids": [],
+    "expected_answer": "26 minutes",
+    "expected_tool": "calculator"
+  },
+  {
+    "id": "q11",
+    "question": "Beacon scrapes metrics every 30 seconds. How many scrapes happen in one hour?",
+    "category": "tool_arithmetic",
+    "difficulty": "easy",
+    "expected_doc_ids": [
+      "arch-beacon"
+    ],
+    "expected_record_ids": [],
+    "expected_answer": "120",
+    "expected_tool": "calculator"
+  },
+  {
+    "id": "q12",
+    "question": "Who should be paged if the team that owns Cascade needs to be escalated to, and how long after the first page does escalation to secondary happen?",
+    "category": "multi_hop",
+    "difficulty": "medium",
+    "expected_doc_ids": [
+      "runbook-oncall-escalation"
+    ],
+    "expected_record_ids": [
+      "cascade"
+    ],
+    "expected_answer": "Nimbus-Data's on-call; escalates to secondary after 10 minutes without acknowledgment",
+    "expected_tool": "lookup_record"
+  },
+  {
+    "id": "q13",
+    "question": "If Ferry's July 2026 storage quota issue happened again, which team owns the fix, and what does policy require before deleting anything older than 30 days?",
+    "category": "multi_hop",
+    "difficulty": "hard",
+    "expected_doc_ids": [
+      "postmortem-2026-07-ferry-quota",
+      "runbook-storage-cleanup"
+    ],
+    "expected_record_ids": [
+      "ferry"
+    ],
+    "expected_answer": "Nimbus-Data; deleting objects older than 30 days requires written approval from the bucket owner",
+    "expected_tool": "lookup_record"
+  },
+  {
+    "id": "q14",
+    "question": "Aurora's rate limit is 5,000 events per second per tenant. Roughly how many events could one tenant send in a 10 minute window at that limit?",
+    "category": "multi_hop",
+    "difficulty": "hard",
+    "expected_doc_ids": [
+      "arch-aurora"
+    ],
+    "expected_record_ids": [],
+    "expected_answer": "3,000,000 events",
+    "expected_tool": "calculator"
+  },
+  {
+    "id": "q15",
+    "question": "What was Nimbus's total revenue last quarter?",
+    "category": "out_of_corpus",
+    "difficulty": "medium",
+    "expected_doc_ids": [],
+    "expected_record_ids": [],
+    "expected_answer": "not answerable from the knowledge base",
+    "expected_tool": null
+  },
+  {
+    "id": "q16",
+    "question": "Who is the CEO of the company that runs Nimbus?",
+    "category": "out_of_corpus",
+    "difficulty": "medium",
+    "expected_doc_ids": [],
+    "expected_record_ids": [],
+    "expected_answer": "not answerable from the knowledge base",
+    "expected_tool": null
+  },
+  {
+    "id": "q17",
+    "question": "What programming language is Aurora written in?",
+    "category": "out_of_corpus",
+    "difficulty": "easy",
+    "expected_doc_ids": [],
+    "expected_record_ids": [],
+    "expected_answer": "not answerable from the knowledge base",
+    "expected_tool": null
+  },
+  {
+    "id": "q18",
+    "question": "List all services owned by Nimbus-Platform.",
+    "category": "structured_record",
+    "difficulty": "medium",
+    "expected_doc_ids": [],
+    "expected_record_ids": [
+      "anchor",
+      "beacon",
+      "lighthouse"
+    ],
+    "expected_answer": "Anchor, Beacon, and Lighthouse",
+    "expected_tool": "search_records"
+  },
+  {
+    "id": "q19",
+    "question": "What channels can Lighthouse use to deliver a notification?",
+    "category": "pure_document",
+    "difficulty": "easy",
+    "expected_doc_ids": [
+      "arch-lighthouse",
+      "api-lighthouse"
+    ],
+    "expected_answer": "email, SMS, and push",
+    "expected_tool": null
+  },
+  {
+    "id": "q20",
+    "question": "Compass has a default global rate limit of 10,000 requests per second. If that traffic were split evenly across 7 backend services, roughly how many requests per second would each service receive?",
+    "category": "tool_arithmetic",
+    "difficulty": "hard",
+    "expected_doc_ids": [
+      "arch-compass"
+    ],
+    "expected_record_ids": [],
+    "expected_answer": "about 1,428.6 requests per second",
+    "expected_tool": "calculator"
+  }
+]

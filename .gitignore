@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+data/index/
+data/long_term_memory.json
+data/eval_report.json
+*.log
+.DS_Store
+scratch/

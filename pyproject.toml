@@ -1,0 +1,34 @@
+[project]
+name = "agent-runtime"
+version = "0.1.0"
+description = "A from-scratch agentic RAG runtime: explicit agent loop, MCP tool integration, memory, and a small multi-agent architecture."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=1.0.0",
+    "fastapi>=0.141.1",
+    "mcp[cli]>=2.1.1",
+    "numpy>=2.4.6",
+    "ollama>=0.6.2",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.15.0",
+    "python-dotenv>=1.2.3",
+    "rich>=15.0.0",
+    "scipy>=1.13.0",
+    "sentence-transformers>=6.0.0",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.2,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+markers = ["integration: requires Ollama running locally (slower, real model calls)"]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]

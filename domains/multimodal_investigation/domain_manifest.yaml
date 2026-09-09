@@ -1,0 +1,30 @@
+name: multimodal_investigation
+title: "Multimodal Business Operations & Document Audit"
+description: "Visual document extraction, scanned invoice auditing, telemetry chart analysis, and deterministic financial governance."
+
+active_tools:
+  - vision.extract_document_metrics
+  - vision.analyze_chart_data
+  - vision.list_visual_artifacts
+  - local.calculator
+
+policy_rules:
+  - name: invoice_math_reconciliation
+    condition: "abs((subtotal + tax_amount) - total_amount) > 0.01"
+    action: BLOCKED
+    description: "Line item subtotal plus tax must reconcile exactly with invoice total. Discrepancies indicate tampering or billing error."
+
+  - name: duplicate_invoice_prevention
+    condition: "invoice_status == 'already_paid' or is_duplicate == true"
+    action: BLOCKED
+    description: "Duplicate or previously settled invoices cannot be approved for payment."
+
+  - name: executive_expense_approval
+    condition: "total_amount > 1000.0"
+    action: REQUIRES_APPROVAL
+    description: "Expenses exceeding $1,000 require executive authorization before disbursement."
+
+  - name: sla_breach_detection
+    condition: "min_uptime_pct < 99.90"
+    action: REQUIRES_APPROVAL
+    description: "Service uptime dipping below 99.90% represents an SLA breach requiring commercial penalty credit calculation."

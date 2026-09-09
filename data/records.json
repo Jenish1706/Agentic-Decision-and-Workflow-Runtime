@@ -1,0 +1,107 @@
+{
+  "services": [
+    {
+      "id": "aurora",
+      "type": "service",
+      "name": "Aurora",
+      "description": "Event ingestion service",
+      "owner_team": "nimbus-core",
+      "tier": 1,
+      "uptime_slo_pct": 99.9,
+      "region": "us-east-1",
+      "last_deploy": "2026-08-12"
+    },
+    {
+      "id": "compass",
+      "type": "service",
+      "name": "Compass",
+      "description": "API gateway",
+      "owner_team": "nimbus-core",
+      "tier": 1,
+      "uptime_slo_pct": 99.9,
+      "region": "us-east-1",
+      "last_deploy": "2026-08-20"
+    },
+    {
+      "id": "anchor",
+      "type": "service",
+      "name": "Anchor",
+      "description": "Authentication and identity service",
+      "owner_team": "nimbus-platform",
+      "tier": 1,
+      "uptime_slo_pct": 99.9,
+      "region": "us-east-1",
+      "last_deploy": "2026-08-05"
+    },
+    {
+      "id": "beacon",
+      "type": "service",
+      "name": "Beacon",
+      "description": "Monitoring and alerting service",
+      "owner_team": "nimbus-platform",
+      "tier": 2,
+      "uptime_slo_pct": 99.5,
+      "region": "us-east-1",
+      "last_deploy": "2026-07-29"
+    },
+    {
+      "id": "lighthouse",
+      "type": "service",
+      "name": "Lighthouse",
+      "description": "Notification delivery service",
+      "owner_team": "nimbus-platform",
+      "tier": 2,
+      "uptime_slo_pct": 99.5,
+      "region": "us-east-1",
+      "last_deploy": "2026-08-15"
+    },
+    {
+      "id": "cascade",
+      "type": "service",
+      "name": "Cascade",
+      "description": "Batch data pipeline / ETL",
+      "owner_team": "nimbus-data",
+      "tier": 2,
+      "uptime_slo_pct": 99.5,
+      "region": "us-west-2",
+      "last_deploy": "2026-08-01"
+    },
+    {
+      "id": "ferry",
+      "type": "service",
+      "name": "Ferry",
+      "description": "Object storage service",
+      "owner_team": "nimbus-data",
+      "tier": 2,
+      "uptime_slo_pct": 99.5,
+      "region": "us-west-2",
+      "last_deploy": "2026-07-22"
+    }
+  ],
+  "teams": [
+    {
+      "id": "nimbus-core",
+      "type": "team",
+      "name": "Nimbus-Core",
+      "slack_channel": "#nimbus-core",
+      "oncall_primary": "j.alvarez",
+      "oncall_secondary": "s.chen"
+    },
+    {
+      "id": "nimbus-platform",
+      "type": "team",
+      "name": "Nimbus-Platform",
+      "slack_channel": "#nimbus-platform",
+      "oncall_primary": "r.osei",
+      "oncall_secondary": "m.kaur"
+    },
+    {
+      "id": "nimbus-data",
+      "type": "team",
+      "name": "Nimbus-Data",
+      "slack_channel": "#nimbus-data",
+      "oncall_primary": "t.nguyen",
+      "oncall_secondary": "d.ibrahim"
+    }
+  ]
+}

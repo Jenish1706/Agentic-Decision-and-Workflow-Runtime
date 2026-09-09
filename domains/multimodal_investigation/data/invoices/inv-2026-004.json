@@ -1,0 +1,31 @@
+{
+  "document_id": "INV-2026-004",
+  "document_type": "scanned_invoice",
+  "vendor_name": "OfficeDepot Direct",
+  "vendor_tax_id": "US-119283746",
+  "invoice_date": "2026-08-28",
+  "due_date": "2026-09-28",
+  "currency": "USD",
+  "line_items": [
+    {
+      "description": "Ergonomic Keyboards & Mice (4 units)",
+      "quantity": 4,
+      "unit_price": 80.0,
+      "amount": 320.0
+    },
+    {
+      "description": "Recycled Printer Paper (10 reams)",
+      "quantity": 10,
+      "unit_price": 10.0,
+      "amount": 100.0
+    }
+  ],
+  "subtotal": 420.0,
+  "tax_rate_pct": 8.0,
+  "tax_amount": 33.6,
+  "total_amount": 453.6,
+  "settlement_status": "unpaid",
+  "is_duplicate": false,
+  "ocr_confidence": 0.994,
+  "notes": "Standard department supply order under $1,000 threshold."
+}

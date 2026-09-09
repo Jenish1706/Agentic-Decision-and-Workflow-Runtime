@@ -1,0 +1,25 @@
+name: product_analytics
+title: "E-Commerce Checkout & Growth Analytics"
+description: "Product telemetry, checkout conversion funnels, segment analysis, and A/B experimentation records."
+
+database:
+  engine: duckdb
+  path: data/product_analytics.duckdb
+  read_only: true
+  enable_external_access: false
+
+active_tools:
+  - analytics.execute_sql
+  - analytics.describe_tables
+  - analytics.test_significance
+  - local.calculator
+
+policy_rules:
+  - name: high_impact_rollout_approval
+    condition: "rollout_pct > 20"
+    action: REQUIRES_APPROVAL
+    description: "Rollout of experiment variants affecting >20% of traffic requires product lead approval."
+  - name: statistical_significance_gate
+    condition: "p_value > 0.05"
+    action: BLOCKED
+    description: "Cannot recommend feature rollout if p_value is not statistically significant (alpha=0.05)."

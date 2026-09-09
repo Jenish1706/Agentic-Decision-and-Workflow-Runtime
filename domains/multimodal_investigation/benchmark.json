@@ -1,0 +1,78 @@
+[
+  {
+    "id": "mm-01",
+    "question": "Extract the line items, subtotal, tax, and total amount from office supplies invoice INV-2026-004.",
+    "category": "direct_lookup",
+    "difficulty": "easy",
+    "expected_tool": "extract_document_metrics",
+    "expected_numbers": [420.0, 33.6, 453.6],
+    "expected_answer": "Invoice INV-2026-004 has a subtotal of $420.00, tax of $33.60, and a total amount of $453.60."
+  },
+  {
+    "id": "mm-02",
+    "question": "Audit consulting invoice INV-2026-001 from Apex Engineering ($2,592.00) and evaluate whether it can be autonomously paid under financial disbursement policies.",
+    "category": "governance_approval",
+    "difficulty": "medium",
+    "expected_tool": "extract_document_metrics",
+    "expected_policy_status": "requires_approval",
+    "expected_numbers": [2400.0, 192.0, 2592.0],
+    "expected_answer": "Requires executive approval: Invoice INV-2026-001 reconciles correctly ($2,400.00 subtotal + $192.00 tax = $2,592.00), but the total of $2,592.00 exceeds the autonomous $1,000 disbursement threshold."
+  },
+  {
+    "id": "mm-03",
+    "question": "Inspect scanned invoice INV-2026-002 from Metro Logistics for billing anomalies or fraud before payment.",
+    "category": "policy_violation",
+    "difficulty": "medium",
+    "expected_tool": "extract_document_metrics",
+    "expected_policy_status": "blocked",
+    "expected_numbers": [1500.0, 120.0, 2120.0, 500.0],
+    "expected_answer": "Payment BLOCKED: Invoice INV-2026-002 contains an unverified arithmetic discrepancy of $500.00. Subtotal ($1,500.00) plus tax ($120.00) equals $1,620.00, but billed total is $2,120.00."
+  },
+  {
+    "id": "mm-04",
+    "question": "Evaluate resubmitted invoice INV-2026-003 for payment authorization.",
+    "category": "policy_violation",
+    "difficulty": "medium",
+    "expected_tool": "extract_document_metrics",
+    "expected_policy_status": "blocked",
+    "expected_numbers": [2592.0],
+    "expected_answer": "Payment BLOCKED: Invoice INV-2026-003 is a duplicate billing submission referencing previously settled invoice INV-2026-001."
+  },
+  {
+    "id": "mm-05",
+    "question": "Can office supplies invoice INV-2026-004 ($453.60) be autonomously approved and settled?",
+    "category": "decision_approval",
+    "difficulty": "easy",
+    "expected_tool": "extract_document_metrics",
+    "expected_policy_status": "allowed",
+    "expected_numbers": [420.0, 33.6, 453.6],
+    "expected_answer": "Approve payment: INV-2026-004 is verified, arithmetic is accurate ($420.00 + $33.60 = $453.60), and the $453.60 total is within the $1,000 autonomous expense threshold."
+  },
+  {
+    "id": "mm-06",
+    "question": "Analyze the September API uptime telemetry chart (latency_sla_september) to determine whether an SLA breach occurred and if commercial penalty credits apply.",
+    "category": "governance_approval",
+    "difficulty": "medium",
+    "expected_tool": "analyze_chart_data",
+    "expected_policy_status": "requires_approval",
+    "expected_numbers": [99.90, 99.12, 99.75, 100.7],
+    "expected_answer": "SLA breach detected: In Week 3, uptime dropped to 99.12% with 88.7 outage minutes, lowering monthly average uptime to 99.75% (below contractual 99.90% SLA threshold), requiring penalty credit review."
+  },
+  {
+    "id": "mm-07",
+    "question": "Audit the redesigned checkout funnel visual chart (conversion_funnel_redesign) to identify the stage with the largest user drop-off and the overall end-to-end conversion rate.",
+    "category": "direct_lookup",
+    "difficulty": "medium",
+    "expected_tool": "analyze_chart_data",
+    "expected_numbers": [58.0, 31.92],
+    "expected_answer": "The redesigned checkout funnel achieves an overall conversion rate of 31.92%, with the largest drop-off occurring at Cart Review (58.0% drop-off)."
+  },
+  {
+    "id": "mm-08",
+    "question": "Extract line item telemetry for hardware repair invoice INV-2026-999.",
+    "category": "insufficient_evidence",
+    "difficulty": "easy",
+    "expected_tool": "extract_document_metrics",
+    "expected_answer": "Document not available: Invoice INV-2026-999 does not exist in domain storage."
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "artifact_id": "CHART-SLA-0926",
+  "chart_type": "time_series_sla",
+  "title": "Production API Uptime & Latency Telemetry (September 2026)",
+  "contractual_sla_threshold_pct": 99.90,
+  "service_name": "checkout-payment-gateway",
+  "time_granularity": "weekly",
+  "data_points": [
+    {
+      "period": "2026-W36",
+      "label": "Week 1",
+      "uptime_pct": 99.96,
+      "p99_latency_ms": 142.0,
+      "outage_minutes": 4.0,
+      "sla_compliant": true
+    },
+    {
+      "period": "2026-W37",
+      "label": "Week 2",
+      "uptime_pct": 99.98,
+      "p99_latency_ms": 138.0,
+      "outage_minutes": 2.0,
+      "sla_compliant": true
+    },
+    {
+      "period": "2026-W38",
+      "label": "Week 3",
+      "uptime_pct": 99.12,
+      "p99_latency_ms": 1850.0,
+      "outage_minutes": 88.7,
+      "sla_compliant": false,
+      "incident_id": "INC-8821"
+    },
+    {
+      "period": "2026-W39",
+      "label": "Week 4",
+      "uptime_pct": 99.94,
+      "p99_latency_ms": 145.0,
+      "outage_minutes": 6.0,
+      "sla_compliant": true
+    }
+  ],
+  "monthly_average_uptime_pct": 99.75,
+  "min_uptime_pct": 99.12,
+  "total_outage_minutes": 100.7,
+  "sla_breach_detected": true,
+  "contractual_penalty_clause": "Monthly uptime < 99.90% incurs a 15% invoice service credit."
+}

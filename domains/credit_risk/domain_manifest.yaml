@@ -1,0 +1,36 @@
+name: credit_risk
+title: "Consumer & Small Business Credit Underwriting"
+description: "Account profiles, credit bureau telemetry, debt-to-income analytics, and deterministic credit limit increase governance."
+
+database:
+  engine: duckdb
+  path: data/credit_risk.duckdb
+  read_only: true
+  enable_external_access: false
+
+active_tools:
+  - credit_risk.execute_sql
+  - credit_risk.describe_tables
+  - credit_risk.get_account_profile
+  - local.calculator
+
+policy_rules:
+  - name: minimum_credit_score
+    condition: "credit_score < 650"
+    action: BLOCKED
+    description: "Credit score must be at least 650 to be eligible for any credit limit increase."
+
+  - name: hard_delinquency_cutoff
+    condition: "delinquencies_90d > 0"
+    action: BLOCKED
+    description: "Any 90-day or greater delinquency in credit history immediately blocks credit increases."
+
+  - name: dti_ceiling
+    condition: "dti_ratio > 0.43"
+    action: BLOCKED
+    description: "Debt-to-income (DTI) ratio exceeding 43% blocks limit expansion."
+
+  - name: high_limit_increase_approval
+    condition: "increase_amount > 5000"
+    action: REQUIRES_APPROVAL
+    description: "Credit limit increase requests exceeding $5,000 require senior underwriter authorization."

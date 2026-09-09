@@ -1,0 +1,30 @@
+{
+  "document_id": "INV-2026-002",
+  "document_type": "scanned_invoice",
+  "vendor_name": "Metro Logistics Partners",
+  "vendor_tax_id": "US-442109823",
+  "invoice_date": "2026-08-20",
+  "due_date": "2026-09-20",
+  "currency": "USD",
+  "line_items": [
+    {
+      "description": "Express Freight Delivery - Batch A",
+      "quantity": 5,
+      "unit_price": 200.0,
+      "amount": 1000.0
+    },
+    {
+      "description": "Warehouse Staging & Handling",
+      "quantity": 1,
+      "unit_price": 500.0,
+      "amount": 500.0
+    }
+  ],
+  "subtotal": 1500.0,
+  "tax_rate_pct": 8.0,
+  "tax_amount": 120.0,
+  "total_amount": 2120.0,
+  "settlement_status": "unpaid",
+  "ocr_confidence": 0.962,
+  "notes": "WARNING: Billed total $2,120.00 does not match subtotal ($1,500.00) + tax ($120.00) = $1,620.00 ($500 phantom surcharge)."
+}

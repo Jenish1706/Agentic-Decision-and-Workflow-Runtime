@@ -1,0 +1,30 @@
+{
+  "document_id": "INV-2026-001",
+  "document_type": "scanned_invoice",
+  "vendor_name": "Apex Engineering Solutions LLC",
+  "vendor_tax_id": "US-883920194",
+  "invoice_date": "2026-08-15",
+  "due_date": "2026-09-15",
+  "currency": "USD",
+  "line_items": [
+    {
+      "description": "Cloud Architecture Review & Hardening",
+      "quantity": 12,
+      "unit_price": 150.0,
+      "amount": 1800.0
+    },
+    {
+      "description": "Database Migration Scripting",
+      "quantity": 4,
+      "unit_price": 150.0,
+      "amount": 600.0
+    }
+  ],
+  "subtotal": 2400.0,
+  "tax_rate_pct": 8.0,
+  "tax_amount": 192.0,
+  "total_amount": 2592.0,
+  "settlement_status": "unpaid",
+  "ocr_confidence": 0.985,
+  "notes": "Standard 30-day net payment terms."
+}

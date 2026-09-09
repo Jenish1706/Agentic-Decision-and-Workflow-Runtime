@@ -1,0 +1,32 @@
+{
+  "document_id": "INV-2026-003",
+  "document_type": "scanned_invoice",
+  "vendor_name": "Apex Engineering Solutions LLC",
+  "vendor_tax_id": "US-883920194",
+  "invoice_date": "2026-08-25",
+  "due_date": "2026-09-25",
+  "currency": "USD",
+  "original_reference_id": "INV-2026-001",
+  "line_items": [
+    {
+      "description": "Cloud Architecture Review & Hardening (Resubmission)",
+      "quantity": 12,
+      "unit_price": 150.0,
+      "amount": 1800.0
+    },
+    {
+      "description": "Database Migration Scripting",
+      "quantity": 4,
+      "unit_price": 150.0,
+      "amount": 600.0
+    }
+  ],
+  "subtotal": 2400.0,
+  "tax_rate_pct": 8.0,
+  "tax_amount": 192.0,
+  "total_amount": 2592.0,
+  "settlement_status": "already_paid",
+  "is_duplicate": true,
+  "ocr_confidence": 0.991,
+  "notes": "Duplicate billing submission of INV-2026-001 already settled on 2026-08-18."
+}

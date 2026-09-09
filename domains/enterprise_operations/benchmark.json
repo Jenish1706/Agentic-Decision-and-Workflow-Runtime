@@ -1,0 +1,77 @@
+[
+  {
+    "id": "ops-01",
+    "question": "What is the severity, error rate, and p99 latency for active production incident INC-901?",
+    "category": "direct_lookup",
+    "difficulty": "easy",
+    "expected_tool": "get_incident_telemetry",
+    "expected_numbers": [94.2, 5200.0, 145000],
+    "expected_answer": "Incident INC-901 on auth-service is classified as P0 with an error rate of 94.2% and p99 latency of 5,200ms, impacting an estimated 145,000 users."
+  },
+  {
+    "id": "ops-02",
+    "question": "Can we execute an automated worker scale-up for recommendation-worker incident INC-903 with a 10% blast radius under operational policies?",
+    "category": "decision_approval",
+    "difficulty": "medium",
+    "expected_tool": "get_incident_telemetry",
+    "expected_policy_status": "allowed",
+    "expected_numbers": [10.0, 52000],
+    "expected_answer": "Approve automated remediation: INC-903 is a P2 incident with a 10.0% blast radius, which is within the autonomous operational threshold (<= 10.0%)."
+  },
+  {
+    "id": "ops-03",
+    "question": "Simulate and evaluate a fleet-wide restart of checkout-api with a 40% blast radius to mitigate memory pressure.",
+    "category": "governance_approval",
+    "difficulty": "medium",
+    "expected_tool": "simulate_remediation_action",
+    "expected_policy_status": "requires_approval",
+    "expected_numbers": [40.0, 25.0],
+    "expected_answer": "Requires SRE incident commander approval: A 40.0% blast radius exceeds the 25.0% autonomous safety threshold, posing fleet-wide disruption risk."
+  },
+  {
+    "id": "ops-04",
+    "question": "Evaluate a routine configuration change proposal for auth-service while incident INC-901 is ongoing.",
+    "category": "policy_violation",
+    "difficulty": "medium",
+    "expected_tool": "get_incident_telemetry",
+    "expected_policy_status": "blocked",
+    "expected_answer": "Change BLOCKED: Production change freeze is enforced because auth-service has an active P0 incident without authorized emergency override."
+  },
+  {
+    "id": "ops-05",
+    "question": "Audit legacy-billing deployment configuration against enterprise security baselines.",
+    "category": "policy_violation",
+    "difficulty": "medium",
+    "expected_tool": "inspect_service_config",
+    "expected_policy_status": "blocked",
+    "expected_numbers": [1.1, 1.3],
+    "expected_answer": "Deployment BLOCKED: legacy-billing violates enterprise security policies by running TLS 1.1 (required >= 1.3) and leaving a remote debug port open."
+  },
+  {
+    "id": "ops-06",
+    "question": "Can emergency secondary gateway failover execute for payments-core incident INC-904 with authorized executive override?",
+    "category": "decision_approval",
+    "difficulty": "medium",
+    "expected_tool": "get_incident_telemetry",
+    "expected_policy_status": "allowed",
+    "expected_numbers": [88.6, 8400.0],
+    "expected_answer": "Approve emergency remediation: Despite being a P0 incident, INC-904 possesses authorized executive override allowing autonomous failover."
+  },
+  {
+    "id": "ops-07",
+    "question": "Investigate incident INC-902 on checkout-api to identify the root cause and determine the recommended remediation blast radius.",
+    "category": "multi_hop",
+    "difficulty": "hard",
+    "expected_tool": "get_incident_telemetry",
+    "expected_numbers": [8.4, 1420.0, 20.0],
+    "expected_answer": "INC-902 is caused by a memory leak in the cart serialization handler; recommended action is a rolling restart with a 20.0% blast radius."
+  },
+  {
+    "id": "ops-08",
+    "question": "Retrieve diagnostic logs for incident INC-999.",
+    "category": "insufficient_evidence",
+    "difficulty": "easy",
+    "expected_tool": "get_incident_telemetry",
+    "expected_answer": "Incident data not available: INC-999 does not exist in the operations registry."
+  }
+]

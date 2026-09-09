@@ -1,0 +1,61 @@
+[
+  {
+    "incident_id": "INC-901",
+    "service_name": "auth-service",
+    "severity": "P0",
+    "status": "active",
+    "title": "OAuth Token Verification Timeout Outage",
+    "error_rate_pct": 94.2,
+    "p99_latency_ms": 5200.0,
+    "affected_regions": ["us-east-1", "eu-central-1"],
+    "impacted_users_estimate": 145000,
+    "root_cause_summary": "Deadlock in Redis token cache session pool following build 4.12.0.",
+    "recommended_action": "rollback_deployment",
+    "override_authorized": false
+  },
+  {
+    "incident_id": "INC-902",
+    "service_name": "checkout-api",
+    "severity": "P1",
+    "status": "investigating",
+    "title": "Degraded Checkout Success & High Latency",
+    "error_rate_pct": 8.4,
+    "p99_latency_ms": 1420.0,
+    "affected_regions": ["us-west-2"],
+    "impacted_users_estimate": 8200,
+    "root_cause_summary": "Memory leak in cart serialization handler causing pod OOM restarts.",
+    "recommended_action": "rolling_restart",
+    "blast_radius_pct": 20.0,
+    "override_authorized": false
+  },
+  {
+    "incident_id": "INC-903",
+    "service_name": "recommendation-worker",
+    "severity": "P2",
+    "status": "mitigating",
+    "title": "Kafka Consumer Lag Spillover",
+    "error_rate_pct": 1.2,
+    "p99_latency_ms": 310.0,
+    "affected_regions": ["us-east-1"],
+    "impacted_users_estimate": 450,
+    "queue_backlog_items": 52000,
+    "root_cause_summary": "Worker thread pool exhaustion on batch processor nodes.",
+    "recommended_action": "scale_workers",
+    "blast_radius_pct": 10.0,
+    "override_authorized": false
+  },
+  {
+    "incident_id": "INC-904",
+    "service_name": "payments-core",
+    "severity": "P0",
+    "status": "active",
+    "title": "Payment Gateway Connection Saturation",
+    "error_rate_pct": 88.6,
+    "p99_latency_ms": 8400.0,
+    "affected_regions": ["all"],
+    "impacted_users_estimate": 210000,
+    "root_cause_summary": "Downstream acquiring bank network timeout cascading to connection pool exhaustion.",
+    "recommended_action": "failover_secondary_gateway",
+    "override_authorized": true
+  }
+]
