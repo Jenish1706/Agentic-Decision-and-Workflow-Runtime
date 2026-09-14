@@ -2,8 +2,8 @@
 (small, bounded) agent loop - Retriever is a direct pipeline call and
 Verifier is a single judge call, because neither needs autonomous
 step-by-step reasoning to do its one job. Giving every worker its own full
-ReAct loop would multiply agent loops for no added capability; see
-docs/SPEC.md section 7 for why this project doesn't do that.
+ReAct loop would multiply agent loops (and LLM calls) for no added
+capability.
 """
 
 from dataclasses import dataclass
@@ -55,6 +55,12 @@ class ResearcherWorker:
         self._runtime = AgentRuntime(llm=llm, tools=tools, rag=None, max_steps=max_steps, max_decision_retries=1)
 
     async def run(self, query: str) -> ResearchOutcome:
+        # Each delegation is an independent sub-task. The worker keeps one
+        # AgentRuntime for its whole life, and a runtime remembers recent
+        # turns, so without this reset every question the Supervisor handled
+        # leaked into the Researcher's prompt for the next one - including
+        # across benchmark questions in the multi-agent evaluation.
+        self._runtime.reset_session()
         state = await self._runtime.run(query)
         calls = state.tool_calls()
         return ResearchOutcome(

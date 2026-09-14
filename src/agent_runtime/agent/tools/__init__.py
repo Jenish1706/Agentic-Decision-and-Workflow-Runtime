@@ -1,5 +1,5 @@
-from .base import Tool, ToolResult
+from .base import Tool, ToolCategory, ToolResult
 from .calculator import CalculatorTool
-from .registry import ToolRegistry
+from .registry import ToolRegistry, build_restricted_registry
 
-__all__ = ["Tool", "ToolResult", "CalculatorTool", "ToolRegistry"]
+__all__ = ["CalculatorTool", "Tool", "ToolCategory", "ToolRegistry", "ToolResult", "build_restricted_registry"]

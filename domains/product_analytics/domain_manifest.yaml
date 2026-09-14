@@ -1,25 +1,28 @@
+# Domain manifest, read by agent_runtime/domains.py.
+#
+# `thresholds` are the numbers policies.py enforces; the loader rejects a
+# manifest with a missing or unknown threshold. `policy_rules` documents each
+# rule, and the loader checks these names against the rules the code registers,
+# so this file cannot silently drift from what actually runs.
 name: product_analytics
 title: "E-Commerce Checkout & Growth Analytics"
-description: "Product telemetry, checkout conversion funnels, segment analysis, and A/B experimentation records."
+description: "Product telemetry, checkout conversion funnels, segment analysis, and A/B experiment rollout governance."
 
-database:
-  engine: duckdb
-  path: data/product_analytics.duckdb
-  read_only: true
-  enable_external_access: false
+# Shown to the model with the decision rules: the action and parameter names
+# the rules understand, and the evidence they read. It never changes a verdict.
+decision_guide: |
+  Decisions here are experiment rollouts. Use recommended_action "rollout_variant_b" with parameters
+  experiment_id (for example "EXP-204") and traffic_percentage (the 0-100 share of traffic to roll
+  out to). The rules read that experiment's p_value and difference_pp from test_significance.
 
-active_tools:
-  - analytics.execute_sql
-  - analytics.describe_tables
-  - analytics.test_significance
-  - local.calculator
+thresholds:
+  significance_alpha: 0.05
+  max_autonomous_traffic_pct: 50
 
 policy_rules:
-  - name: high_impact_rollout_approval
-    condition: "rollout_pct > 20"
-    action: REQUIRES_APPROVAL
-    description: "Rollout of experiment variants affecting >20% of traffic requires product lead approval."
   - name: statistical_significance_gate
-    condition: "p_value > 0.05"
-    action: BLOCKED
-    description: "Cannot recommend feature rollout if p_value is not statistically significant (alpha=0.05)."
+    on_violation: BLOCKED
+    description: "A rollout needs the named experiment's p-value below significance_alpha AND the treatment ahead of control. Without a significance test in evidence the rollout requires approval."
+  - name: high_impact_rollout_approval
+    on_violation: REQUIRES_APPROVAL
+    description: "Rollouts to more than max_autonomous_traffic_pct percent of traffic, or with no stated traffic percentage, require product lead approval."

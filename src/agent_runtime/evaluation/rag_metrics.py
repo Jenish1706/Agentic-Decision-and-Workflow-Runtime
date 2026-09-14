@@ -25,51 +25,40 @@ class RetrievalScore:
     reciprocal_rank: float | None
 
 
-def score_retrieval(rag: RagPipeline, query: EvalQuery, top_k: int = 3) -> RetrievalScore:
-    """None (not 0.0) means 'not applicable' - this query has no expected
-    documents (e.g. it's answerable purely from structured records, or is
-    an out-of-corpus trap), so retrieval quality isn't a meaningful score
-    for it and it should be excluded from the aggregate, not penalized."""
-    if not query.expected_doc_ids:
+def rank_metrics(retrieved_doc_ids: list[str], expected_doc_ids: list[str]) -> RetrievalScore:
+    """Recall@k and reciprocal rank of one ranked list against the expected
+    documents. None (not 0.0) means 'not applicable': a query with no
+    expected documents (answerable from structured records, or an
+    out-of-corpus trap) is excluded from the aggregate, not penalized.
+
+    Shared by both retrieval modes so the naive and reranked scores are
+    guaranteed to be computed identically; the two used to be separate
+    copy-pasted functions."""
+    if not expected_doc_ids:
         return RetrievalScore(recall_at_k=None, reciprocal_rank=None)
-
-    results = rag.retrieve(query.question, top_k_rerank=top_k)
-    retrieved_doc_ids = [r.chunk.doc_id for r in results]
-    expected = set(query.expected_doc_ids)
-
-    hit_count = len({d for d in retrieved_doc_ids if d in expected})
-    recall = hit_count / len(expected)
-
-    reciprocal_rank = 0.0
-    for rank, doc_id in enumerate(retrieved_doc_ids, start=1):
-        if doc_id in expected:
-            reciprocal_rank = 1.0 / rank
-            break
-
+    expected = set(expected_doc_ids)
+    recall = len(expected.intersection(retrieved_doc_ids)) / len(expected)
+    reciprocal_rank = next(
+        (1.0 / rank for rank, doc_id in enumerate(retrieved_doc_ids, start=1) if doc_id in expected), 0.0
+    )
     return RetrievalScore(recall_at_k=recall, reciprocal_rank=reciprocal_rank)
+
+
+def score_retrieval(rag: RagPipeline, query: EvalQuery, top_k: int = 3) -> RetrievalScore:
+    """Retrieval quality with reranking (the path the agents use)."""
+    if not query.expected_doc_ids:
+        return rank_metrics([], [])
+    results = rag.retrieve(query.question, top_k_rerank=top_k)
+    return rank_metrics([result.chunk.doc_id for result in results], query.expected_doc_ids)
 
 
 def score_retrieval_naive(rag: RagPipeline, query: EvalQuery, top_k: int = 3) -> RetrievalScore:
-    """Same as score_retrieval but skips the reranking step - this is the
-    'naive retrieval vs reranked retrieval' comparison Constraint 5 asks
-    for, computed by calling the pipeline's bi-encoder-only path."""
+    """Same, without the reranking step (bi-encoder only) - the naive vs
+    reranked comparison in the evaluation report."""
     if not query.expected_doc_ids:
-        return RetrievalScore(recall_at_k=None, reciprocal_rank=None)
-
+        return rank_metrics([], [])
     results = rag.retrieve_naive(query.question, top_k=top_k)
-    retrieved_doc_ids = [r.chunk.doc_id for r in results]
-    expected = set(query.expected_doc_ids)
-
-    hit_count = len({d for d in retrieved_doc_ids if d in expected})
-    recall = hit_count / len(expected)
-
-    reciprocal_rank = 0.0
-    for rank, doc_id in enumerate(retrieved_doc_ids, start=1):
-        if doc_id in expected:
-            reciprocal_rank = 1.0 / rank
-            break
-
-    return RetrievalScore(recall_at_k=recall, reciprocal_rank=reciprocal_rank)
+    return rank_metrics([result.chunk.doc_id for result in results], query.expected_doc_ids)
 
 
 async def score_groundedness(llm: LLMClient, query: EvalQuery, answer: str, evidence_text: str) -> tuple[bool, list[str]]:

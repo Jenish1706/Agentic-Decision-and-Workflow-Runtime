@@ -17,6 +17,10 @@ from rich.console import Console
 from rich.table import Table
 
 from ..config import settings
+from ..llm.base import LLMError
+from ..llm.ollama_client import OllamaClient
+from ..rag.ingest import build_rag_pipeline
+from ..runtime_factory import build_multi_agent_supervisor, build_single_agent_runtime
 from .agent_metrics import (
     count_unnecessary_tool_calls,
     score_task_success,
@@ -25,10 +29,6 @@ from .agent_metrics import (
     single_agent_tool_names,
 )
 from .dataset import EvalQuery, load_benchmark
-from ..llm.base import LLMError
-from ..llm.ollama_client import OllamaClient
-from ..rag.ingest import build_rag_pipeline
-from ..runtime_factory import build_multi_agent_supervisor, build_single_agent_runtime
 from .rag_metrics import (
     score_citation_correctness,
     score_groundedness,
@@ -101,6 +101,11 @@ async def run_single_agent(queries: list[EvalQuery], judge_llm: OllamaClient) ->
     async with build_single_agent_runtime(with_memory=False) as runtime:
         for position, q in enumerate(queries, start=1):
             console.print(f"  [single-agent {position}/{len(queries)}] {q.id}: {q.question[:60]}...")
+            # Every benchmark question is independent. Without this reset the
+            # runtime's short-term memory put earlier questions and answers
+            # into every later prompt, so results published before this fix
+            # were measured on contaminated inputs.
+            runtime.reset_session()
             start = time.perf_counter()
             state = await runtime.run(q.question)
             latency = time.perf_counter() - start

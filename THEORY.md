@@ -64,11 +64,13 @@ whether to retrieve, call a tool, or answer - the code doesn't hard-code
 that sequence.
 
 **What is an agent loop? What is state? What is an observation?** The loop
-is `while not done: decide -> act -> observe -> update state`. State
+is `decide -> act -> observe -> update state`, repeated until a final
+answer is accepted or the step bound is hit. State
 (`agent/state.py`'s `AgentState`) is everything accumulated *this run*: the
-query, every step taken, whether it's finished. An observation is the
-result of an action - retrieved text, a tool's return value, or a tool's
-error message - appended to state so the *next* decision can see it.
+query, every step taken, the evidence ledger, whether it's finished. An
+observation is the result of an action - retrieved text, a tool's return
+value, a tool's error, or a verification failure - appended to state so the
+*next* decision can see it.
 
 **What is tool calling? How does an agent decide which tool to use?** The
 LLM is shown every registered tool's name, description, and parameter
@@ -79,20 +81,26 @@ hand-rolled agent loop" - the model's decision is schema-constrained JSON
 (`ActionDecision`, [agent/actions.py](src/agent_runtime/agent/actions.py))
 that this code parses and dispatches itself.
 
-**How do you prevent infinite loops?** A hard `max_steps` bound
-(`config.py`'s `max_agent_steps`) - the loop is a bounded `for` over
-`range(max_steps)`, not a `while True`. If the model never reaches a
-grounded final answer, the run terminates with `TerminationReason.MAX_STEPS_REACHED`
-rather than continuing indefinitely.
+**How do you prevent infinite loops and runaway cost?** A hard step bound -
+the loop is a `for` over `range(max_steps)`, not a `while True` - plus
+per-run budgets for retrievals, SQL queries and document extraction
+([agent/budget.py](src/agent_runtime/agent/budget.py)). A budget is created
+fresh for every run; an exhausted one becomes an observation ("SQL query
+budget exhausted") so the model answers with what it has. If no grounded
+final answer arrives, the run ends with `TerminationReason.MAX_STEPS_REACHED`.
 
 **What happens when a tool fails?** [agent/tools/registry.py](src/agent_runtime/agent/tools/registry.py)'s
-`execute()` catches both bad arguments (`TypeError`) and the tool's own
-exceptions, turning either into a `ToolResult(ok=False, error=...)` - never
-an exception that would crash the loop. The error text becomes the next
-observation, so the model can see *what* went wrong and try something else.
-The same applies to the LLM call itself: if `decide()` never produces
-schema-valid JSON after retries, `agent/loop.py` catches `LLMError` and
-terminates with `UNRECOVERABLE_ERROR` rather than propagating a crash.
+`execute()` first checks the arguments against the tool's signature, then
+runs it; bad arguments and the tool's own exceptions both come back as
+`ToolResult(ok=False, error=...)` - never an exception that would crash the
+loop. (Checking the signature *before* the call matters: catching
+`TypeError` around the whole call misreported a bug inside a tool as "bad
+arguments".) The error text becomes the next observation. If the LLM itself
+never produces schema-valid JSON after retries, the loop catches `LLMError`
+and terminates with `UNRECOVERABLE_ERROR`. A dead Ollama server is
+deliberately *not* converted into `LLMError` - see `llm/ollama_client.py` -
+so an outage crashes visibly instead of producing a benchmark full of
+plausible-looking failures.
 
 ## Multi-agent
 
@@ -104,7 +112,7 @@ generation/verification (evaluator-optimizer). This project's Supervisor
 ([multi_agent/supervisor.py](src/agent_runtime/multi_agent/supervisor.py))
 exists specifically to demonstrate and measure that trade-off against the
 single-agent path - see [EVALUATION.md](EVALUATION.md) for the actual
-comparison, not just the architecture.
+comparison and its caveats.
 
 **How do agents communicate? What does a supervisor do?** Here,
 communication is a Python function call / return value, not a
@@ -119,9 +127,10 @@ itself.
 query (higher latency and cost - the Researcher worker alone can add
 several), more places for something to go subtly wrong (a worker's
 output can be wrong in a way that isn't caught until verification), and
-more code to reason about. [EVALUATION.md](EVALUATION.md) reports the
-actual step-count and latency delta measured on this project's benchmark,
-not just the theoretical concern.
+more state to keep straight. A concrete example from this codebase: the
+Researcher worker reuses one `AgentRuntime`, which keeps conversation
+memory, so every delegated task used to see the previous tasks' questions
+and answers until it started resetting its session per task.
 
 ## Memory
 
@@ -134,21 +143,31 @@ and mechanisms, easy to conflate:
   assembled into the next LLM prompt (`_build_messages` in loop.py). It's
   built fresh from state + memory every step.
 - **Memory** ([agent/memory/](src/agent_runtime/agent/memory/)) - survives
-  *across* runs. Short-term = recent turns in this process; long-term =
+  *across* runs. Short-term = recent turns in this session; long-term =
   persisted to disk, retrieved by similarity.
 - **Retrieval** - the general mechanism (embed a query, search an index).
   RAG and long-term memory both use it, over different collections.
 
 **Short-term vs. long-term memory?** [short_term.py](src/agent_runtime/agent/memory/short_term.py)
-is just the last N `(query, answer)` pairs, injected verbatim - no
-retrieval, no persistence, cleared when the process ends.
-[long_term.py](src/agent_runtime/agent/memory/long_term.py) is embedded and
-persisted to `data/long_term_memory.json`, and survives a process restart.
+is the last N `(query, answer)` pairs in a bounded deque, injected verbatim -
+no retrieval, no persistence. [long_term.py](src/agent_runtime/agent/memory/long_term.py)
+is embedded and persisted to `data/long_term_memory.json`, and survives a
+process restart.
+
+**When is memory a bug rather than a feature?** When the next question is
+unrelated. Recent turns are injected into every prompt, so benchmark
+questions, API requests from different users, and delegated sub-tasks must
+each start from an empty session (`AgentRuntime.reset_session()`). The
+evaluation harnesses originally did not reset, so each benchmark question
+saw the previous ones; see EVALUATION.md for what that means for the
+published numbers.
 
 **How is memory retrieved?** By the exact same mechanism as document RAG -
 `LongTermMemory` holds its own `Embedder` + `VectorIndex` instance, over a
-much smaller collection of remembered facts rather than document chunks.
-The retrieval *code path* is identical; only the collection differs.
+much smaller collection of remembered facts rather than document chunks -
+with a similarity floor, so a memory is only injected when it is related to
+the question. Without the floor, top-k retrieval over two stored memories
+returned both of them for every question.
 
 **When should information be stored? Why isn't the whole conversation
 automatically memory?** Because most of a conversation is not durable -
@@ -156,16 +175,14 @@ routine questions and their answers aren't useful to recall in an unrelated
 future conversation. `LongTermMemory.maybe_store()` puts this decision to
 an explicit LLM call (`_MemoryWriteDecision`) after every turn, asking
 specifically whether *this* exchange contains a preference or constraint
-worth keeping. Most turns come back `worth_remembering=False` and nothing
-is written - see the test cases in
-[test_memory.py](tests/test_memory.py) for both outcomes.
+worth keeping - see [test_memory.py](tests/test_memory.py) for both outcomes.
 
 ## MCP
 
 See [MCP.md](MCP.md) for the full write-up. Short version: MCP solves tool
 *discovery and invocation across a process boundary* - what problem it
-solves, client vs. server, why schemas, and local-vs-protocol tool contrast
-are all covered there with direct code references.
+solves, client vs. server, why schemas, tool metadata, and local-vs-protocol
+tool contrast are all covered there with direct code references.
 
 ## Evaluation
 
@@ -181,98 +198,135 @@ check: given what *was* retrieved, did the answer actually stick to it.
 **How do you evaluate agents?** Task success (does the final answer match
 the expected answer, judged by a second LLM call rather than exact string
 match - see `llm_judge_task_success` in [agent/llm_judge.py](src/agent_runtime/agent/llm_judge.py)),
-tool selection accuracy (did it call the tool the query actually needed),
-unnecessary tool calls, step count, and failure rate (didn't reach a final
-answer at all). See [evaluation/agent_metrics.py](src/agent_runtime/evaluation/agent_metrics.py).
+tool selection accuracy, unnecessary tool calls, step count, expected-number
+recall (are the benchmark's expected figures actually in the answer), policy
+alignment, and failure rate - a run fails if it never reached a final answer
+*or* only reached an unverified one. See
+[evaluation/agent_metrics.py](src/agent_runtime/evaluation/agent_metrics.py).
+
+**What makes an evaluation number trustworthy?** Mostly things this project
+got wrong first and then fixed: independent questions must not share
+conversation memory; a judge that fails to answer must be excluded, not
+silently counted as a pass or a fail; "numerical correctness" must compare
+against expected values rather than merely check that numbers exist
+somewhere in evidence; and an average must only include rows the metric
+applies to (a question that expects no decision is not "policy aligned").
 
 **What failure modes did you observe?** See [EVALUATION.md](EVALUATION.md)'s
 "Observed failure modes" section for what actually happened running this
-project's own benchmark - not a hypothetical list. The six worth being able
-to recount from memory: a citation-avoidance loop that nearly exhausted the
-step budget; a verification bypass caused by two overlapping document-search
-paths; three separate structured-output violations that aborted whole runs;
-tool thrashing that turned inefficiency into outright task failure; a vague
-worker description that silently disabled the entire multi-agent path; and a
-wrong `expected_tool` value in the benchmark that made a *measurement* bug
-look like an agent bug.
+project against a real model - not a hypothetical list.
 
-**Which of your results were negative or surprising?** Worth rehearsing,
-because it's the most likely follow-up: reranking produced no measurable
-improvement (corpus too small for the bi-encoder's top-k to be polluted);
-the multi-agent path was *faster* than the single agent, not slower; and -
-the one that most deflates my own architecture - **capping the single
-agent at one retrieval reproduced almost all of the multi-agent
-advantage** (0.70 → 0.90 vs multi-agent's 0.95). So the measured benefit
-is mostly a *constraint* effect, not an orchestration effect.
+**Which of your results were negative or surprising?** Reranking produced no
+measurable improvement (corpus too small for the bi-encoder's top-k to be
+polluted); the multi-agent path was *faster* than the single agent; and
+capping the single agent at one retrieval reproduced most of the multi-agent
+advantage. Those numbers were measured before the session-isolation fix
+(earlier questions leaked into later prompts), so they are hypotheses to
+re-measure rather than settled results - EVALUATION.md says exactly what is
+affected.
 
-**What is a retrieval budget, and does your system have one?** Careful
-answer: it has *implicit* budgets (`top_k_retrieve=8` per call,
-`max_agent_steps=8` per run as a blunt shared counter) and no context-token
-bound at all. The only explicit per-run retrieval cap,
-`AgentRuntime(max_retrievals=...)`, was added to run the experiment and
-defaults to `None`. Search *efficiency* - redundancy, repeated queries,
-chunks consumed - is measured in
+**What is a retrieval budget, and does your system have one?** Two explicit
+per-run caps exist: `AgentRuntime(max_retrievals=...)`, the plain cap the
+retrieval-budget experiment varies, and `ActionBudget.max_retrievals`,
+part of the steps / retrievals / SQL / extraction allocation used by adaptive
+budgeting. There is also an implicit per-call bound (`top_k_retrieve`), and
+no context-token bound at all. Search *efficiency* - redundancy, repeated
+queries, chunks consumed - is measured in
 [evaluation/retrieval_metrics.py](src/agent_runtime/evaluation/retrieval_metrics.py).
-The interesting finding is that loosening the budget degraded every
-dimension measured, and that a tight cap acted as a **hallucination
-control**: out-of-corpus refusals went 1/3 → 3/3, because an agent that
-can keep searching for a nonexistent fact eventually confabulates one from
-tangential context.
 
-## Decision & Workflow Runtime Theory
+## Decision & Workflow Runtime
 
 **Why separate the LLM proposal from deterministic policy enforcement?**
-LLMs are probabilistic and susceptible to prompt injection, semantic drifting, and
-hallucinated justifications. If an agent evaluates its own actions against policy, it
-can hallucinate that an exception applies. The runtime enforces an architectural
-invariant: *LLM proposes; deterministic code verifies and enforces*. A `ProposedDecision`
-is evaluated by `PolicyEngine` (`agent/policy.py`) using pure Python functions without
-any LLM in the loop.
+LLMs are probabilistic and susceptible to prompt injection, drift, and
+hallucinated justifications. If an agent evaluates its own actions against
+policy, it can talk itself into an exception. The runtime's invariant is
+*LLM proposes; deterministic code verifies and enforces*: a
+`ProposedDecision` is evaluated by `PolicyEngine` (`agent/policy.py`) using
+pure Python functions with no LLM in the loop.
+
+**If the model proposes, what stops it from proposing its own facts?**
+This is the most important question about the design, because the original
+rules failed it. They read facts from the proposal's parameters first, so a
+model could write `{"override_authorized": true}` and lift a production
+freeze, or `{"credit_score": 800}` and approve a 610 borrower. Rules now use
+[agent/facts.py](src/agent_runtime/agent/facts.py): the proposal may only
+name the *target* and the action's *own quantities*; every fact about the
+target is resolved from the evidence ledger, scoped to that target's id.
+Evidence may *restrict* a decision on weak grounds (any violating value, even
+unattributed) but *permit* one only on strong grounds (one agreed value
+attributed to the target), and a fact nobody looked up means
+`REQUIRES_APPROVAL`, not "no violation".
+
+**What if the model never attaches a decision at all?** Measured against
+qwen2.5:7b, it usually doesn't: in the first two smoke runs it attached a
+`proposed_decision` in 1 of 10 runs, describing decisions in prose instead
+and leaving the optional field null. When a
+policy engine is configured and no decision is attached, the loop makes one
+follow-up call with an all-required schema (`DecisionExtraction`) to recover
+it from the answer. The extraction is still only a proposal - the engine
+judges it against evidence - and the audit trace records
+`proposed_decision_source` as `final_step` or `extracted`.
 
 **Why is an append-only Evidence Ledger different from agent state or memory?**
-Agent state is an ephemeral scratchpad that is discarded after a run. Long-term memory
-is semantic and heuristic. The `EvidenceLedger` (`agent/evidence.py`) is an append-only,
-immutable audit record of exact tool observations, SQL rows, and statistical tests with
-unique IDs (`ev-sql-001`) and execution timestamps. Because it is immutable, the model
-cannot retroactively alter historical observations to fit a desired conclusion.
+Agent state is an ephemeral scratchpad; long-term memory is semantic and
+heuristic. The `EvidenceLedger` (`agent/evidence.py`) is an append-only
+record of exact tool observations with unique ids and timestamps, and its
+payloads are deep-frozen copies - so neither the model's later steps nor a
+tool mutating its own result afterwards can rewrite an observation. (A
+frozen dataclass alone does not do this: it still held a mutable dict, which
+the original version exposed.)
 
-**Why does regex + scale reconciliation beat LLM-as-a-judge for numerical verification?**
-LLMs are notoriously weak at arithmetic and scale reconciliation (e.g. confusing 0.0293
-with 29.3% instead of 2.93%, or conflating percentage points with relative percentage change).
-`verify_numerical_grounding` (`agent/verification.py`) uses deterministic regex to extract
-all quantitative claims, parses units (%, pp, currency, counts), aligns scale ($x \times 100$),
-and verifies that every reported number mathematically reconciles with ledger facts within a
-strict tolerance ($\pm 0.015$).
+**Why deterministic numerical verification instead of an LLM judge?**
+Small LLMs are weak at arithmetic and scale (0.0293 is 2.93%, not 29.3%;
+percentage points are not relative percent change). `verify_numerical_grounding`
+(`agent/verification.py`) extracts claims with regular expressions, parses
+units (%, pp, currency, counts), and requires each to match evidence within
+the precision it was written at ("2.9%" accepts 2.85-2.95), at a compatible
+unit, in a consistent direction. Measured on 2,000 random fabricated claims
+against a realistic ledger, the previous version (flat ±1.5 pp tolerance,
+any-pair derivations) accepted 50.9%; the current one accepts 6.7% - mostly
+values that coincide with real ones - and none of 2,000 values chosen to lie
+outside every real value and gap. What it cannot check is meaning: swapping
+two real numbers between concepts passes, which is why decisions never read
+the answer text.
 
 **How does policy precedence work?**
-Enterprise governance requires predictable escalation:
 $$\text{BLOCKED} > \text{REQUIRES\_APPROVAL} > \text{ALLOWED}$$
-If a proposal violates a safety or compliance threshold, it is immediately `BLOCKED`.
-If it requires operational sign-off (e.g., rolling out to >50% of users), it transitions to
-`REQUIRES_APPROVAL`. Only proposals passing all registered checks are `ALLOWED`.
+Any `BLOCKED` result blocks; otherwise any `REQUIRES_APPROVAL` escalates;
+only when every rule allows is the proposal `ALLOWED`. So adding a rule can
+only make the system stricter, and an "allow" rule can never override
+anything. The engine also fails closed: a crashing rule counts as `BLOCKED`,
+an internally inconsistent rule result is read restrictively, and a decision
+attached to an answer that failed verification cannot be auto-approved.
 
 **How does adaptive budgeting work?**
-Static resource caps fail on mixed workloads (too loose for factual questions, too tight
-for multi-step root-cause analysis). `classify_task_complexity` (`agent/budget.py`) inspects
-query intent deterministically and assigns an `ActionBudget` bounding steps, searches, and
-SQL queries, preventing runaway loops while allowing deep investigation.
+Static caps fail on mixed workloads (too loose for lookups, too tight for
+root-cause analysis). `classify_task_complexity` (`agent/budget.py`) is a
+transparent keyword classifier - matched on word boundaries, since substring
+matching read "count" inside "account" - that picks an `ActionBudget`. A
+misrouted question gets a tighter or looser budget, never a policy bypass.
 
-**How does the runtime generalize across 4 diverse domains without code duplication?**
-By strictly separating domain assets (`domains/<domain>/` with manifests, schemas, and policy rules)
-from the core execution engine (`src/agent_runtime/`). The agent loop does not have any hardcoded
-logic for "credit risk" or "invoices" or "servers". Instead, it speaks the Model Context Protocol (MCP),
-extracts evidence into an immutable ledger, enforces deterministic Python policy functions via
-`PolicyEngine`, and verifies quantitative assertions against ledger numbers. This allows the SAME
-runtime to underwrite loans, audit scanned expense invoices, diagnose SRE outages, and analyze A/B tests.
+**How does the runtime generalize across four domains without domain code?**
+Each domain folder (`domains/<name>/`) contributes an MCP server, policy
+rules, a manifest (thresholds the rules enforce, plus a short guide to the
+domain's action names) and a benchmark; `agent_runtime.domains` loads and
+cross-checks them. The loop has no logic for "credit risk" or "invoices": it
+gathers evidence through MCP, verifies numbers, and hands proposals to
+whatever `PolicyEngine` it was given.
 
-**Why use deterministic sidecars/OCR extraction instead of black-box multimodal APIs?**
-Proprietary multimodal LLMs hallucinate numbers and alter arithmetic totals when reading invoices or charts.
-By combining layout/OCR parsing with the `EvidenceLedger`, line items, subtotals, and taxes are converted into
-deterministic data payloads *before* reaching the LLM. If an invoice has a \$500 phantom surcharge, the
-`invoice_math_reconciliation` policy catches it mathematically, rather than hoping the LLM notices a subtle discrepancy.
+**What does the multimodal domain actually demonstrate?**
+Honestly: not vision. Invoices and charts are pre-extracted JSON fixtures -
+what a document-extraction model would output - behind tools named for the
+role they play. What the domain demonstrates is the part that matters for
+safety once extraction exists: arithmetic is recomputed from the extracted
+fields (an invoice billing $2,120 for $1,500 + $120 is caught by
+`invoice_math_reconciliation`, not by hoping the LLM notices), missing fields
+are null rather than invented, and payment rules fail closed on anything the
+extraction did not establish.
 
-**What is the difference between an AI showcase and an Enterprise Decision Runtime?**
-An AI showcase connects an LLM to tools and trusts whatever the LLM outputs. An enterprise decision runtime
-treats the LLM as an un-trusted reasoning engine: the LLM proposes actions and drafts recommendations, but
-all quantitative claims are strictly grounded in an append-only ledger, all business actions are evaluated by
-deterministic governance rules, and all steps are recorded in an auditable decision trace.
+**What is the difference between an AI showcase and a decision runtime?**
+A showcase connects an LLM to tools and trusts what comes back. A decision
+runtime treats the LLM as an untrusted proposer: quantitative claims must be
+grounded in an append-only ledger, business actions are judged by
+deterministic rules over that ledger, and every step lands in an audit trace
+- including when verification failed and where the proposal came from.

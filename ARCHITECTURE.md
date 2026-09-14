@@ -1,66 +1,65 @@
 # Architecture
 
-## System diagram: Agentic Decision & Workflow Runtime
+## System diagram
 
 ```
-                         BUSINESS QUESTION / USER QUERY
+                     QUESTION (+ optional ActionBudget chosen by the caller)
                                        |
                                        v
-               +------------------------------------------------+
-               |              BudgetController                  |
-               |  (classifies complexity & bounds resources)    |
-               +-----------------------+------------------------+
-                                       |
-                                       v
-                             AgentRuntime Loop
-                     (observe -> decide -> act -> verify)
+             AgentRuntime.run()  - fresh AgentState, fresh BudgetController
+                    (decide -> act -> observe, bounded by max_steps)
                                        |
         +------------------------------+------------------------------+
         |                              |                              |
         v                              v                              v
    "retrieve"                     local tools                    "call_tool"
-  (MCPRetriever)                 (calculator)                (MCP Tool Client)
+  (MCPRetriever)                 (calculator)                (MCP tool client)
         |                              |                              |
-        v                              |                  +-----------+-----------+
-  knowledge server                     |                  |                       |
-(search_documents)                     |                  v                       v
-        |                              |            records server         analytics server
-        |                              |           (lookup_records)       (execute_sql,
-        |                              |                                  describe_tables,
-        |                              |                                  test_significance)
-        +------------------------------+------------------------------------------+
+        v                              |              +---------------+---------------+
+  knowledge server                     |              |                               |
+ (search_documents)                    |       records server               a domain server
+        |                              |       (lookup_record,            (domains/<name>/server.py:
+        |                              |        search_records)            SQL, statistics, documents,
+        |                              |                                   incidents, ...)
+        +------------------------------+-------------------------------------------+
                                        |
                                        v
                        +-------------------------------+
-                       |   Append-Only EvidenceLedger  |
-                       |  (immutable facts & provenance)|
+                       |   Append-only EvidenceLedger  |
+                       |  deep-frozen tool outputs,    |
+                       |  provenance per item          |
+                       +---------------+---------------+
+                                       |
+                           final answer draft (+ ProposedDecision)
+                                       |
+                                       v
+                       +-------------------------------+
+                       |  Deterministic verification   |
+                       |  - verify_citations           |
+                       |  - verify_numerical_grounding |
+                       |  failed -> corrective         |
+                       |  observation, loop continues  |
                        +---------------+---------------+
                                        |
                                        v
-                             LLM ActionDecision
-                         (proposed_decision & draft)
-                                       |
-                                       v
                        +-------------------------------+
-                       | Deterministic Verifications   |
-                       | - verify_citations            |
-                       | - verify_numerical_grounding  |
-                       +---------------+---------------+
-                                       |
-                                       v
-                       +-------------------------------+
-                       |    PolicyEngine (Governance)  |
+                       |  PolicyEngine (domain rules)  |
+                       |  facts read from the LEDGER,  |
+                       |  never from the proposal      |
                        |  BLOCKED > APPROVAL > ALLOWED |
                        +---------------+---------------+
                                        |
                                        v
-                     Grounded Recommendation + AuditTrace
+                  answer + answer_verified + policy verdict + audit trace
 ```
 
-Note that the core loop is strictly decoupled into proposal and deterministic verification:
-- **LLM proposes**: The LLM suggests tools, interprets questions, and forms drafts.
-- **Deterministic verification & constraints**: Citations, numbers, resource limits, and policies
-  are verified by deterministic Python logic with zero LLM dependence.
+The loop is split into proposal and deterministic control:
+
+- **The LLM proposes**: which action to take next, the answer text, and an
+  optional structured `ProposedDecision`.
+- **Deterministic code verifies and constrains**: budgets, citation checks,
+  numerical checks and policy rules are plain Python over tool outputs, with
+  zero LLM calls.
 
 Multi-agent mode (`Supervisor`) sits beside `AgentRuntime`, reusing the same
 RAG pipeline, tool registry, and LLM client rather than duplicating them:
@@ -73,7 +72,7 @@ RAG pipeline, tool registry, and LLM client rather than duplicating them:
    RetrieverWorker                          ResearcherWorker
    (direct RAG pipeline call,                (an AgentRuntime instance,
     no LLM call of its own)                   rag=None, tools-only,
-            \                                  max_steps=3)
+            \                                  max_steps=3, fresh session per task)
              \                                    /
               v                                  v
                     Synthesizer (generate)
@@ -88,23 +87,20 @@ RAG pipeline, tool registry, and LLM client rather than duplicating them:
                         final answer
 ```
 
-## Why this differs from a naive "diagram-first" design
+## Design choices that shaped the structure
 
-This project started from a proposed architecture (see
-[docs/SPEC.md](docs/SPEC.md) section 7) that already looked roughly like
-the above. Three deliberate simplifications were made to it, each for a
-concrete reason rather than aesthetics:
+The first design was larger. Three simplifications were made on purpose,
+each for a concrete reason:
 
-1. **No separate "Search" (web) MCP server.** A real web-search tool means
-   an external API, a cost, and non-determinism in a project meant to run
-   entirely offline. A structured-records server still gives a genuinely
-   different tool *shape* (exact field lookup vs. semantic search) without
-   that dependency.
-2. **Query rewriting is not a pipeline stage.** It's something the agent
-   loop can already do: if retrieval comes back weak, the loop can decide
-   to retrieve again with a reformulated query. Bolting on a dedicated
-   "query rewriter" module would duplicate a capability the loop already
-   has by construction.
+1. **No web-search MCP server.** A real web-search tool means an external
+   API, a cost, and non-determinism in a project meant to run entirely
+   offline. The structured-records server still gives a genuinely different
+   tool *shape* (exact field lookup vs. semantic search) without that
+   dependency.
+2. **Query rewriting is not a pipeline stage.** The agent loop can already
+   retrieve again with a reformulated query when results are weak; a
+   dedicated "query rewriter" would duplicate a capability the loop has by
+   construction.
 3. **Only the Researcher worker runs a full agent loop.** Retriever is a
    direct pipeline call and Verifier/Synthesizer are single LLM calls -
    giving every worker its own autonomous loop would be four ReAct loops
@@ -112,17 +108,24 @@ concrete reason rather than aesthetics:
    [Anthropic's building-effective-agents guidance](https://www.anthropic.com/engineering/building-effective-agents):
    "consider adding complexity only when it demonstrably improves outcomes."
 
+Deliberately out of scope: model training or fine-tuning, approximate
+nearest-neighbour index algorithms, distributed infrastructure (queues,
+containers, databases beyond embedded DuckDB), authentication, production
+observability stacks, and re-implementing the MCP wire protocol.
+
 ## Component responsibilities
 
 | Module | Responsibility |
 |---|---|
-| `llm/` | One interface (`generate`, `decide`) over the LLM. `decide` is schema-constrained (Ollama's `format` JSON-schema parameter) and bounded-retries on validation failure. |
-| `rag/` | `documents.py` (load+frontmatter) -> `chunking.py` (paragraph-aware, size+overlap) -> `embeddings.py` (sentence-transformers) -> `vector_index.py` (brute-force cosine, numpy) -> `reranker.py` (cross-encoder) -> `pipeline.py` (ties it together) -> `context_builder.py` (citation tagging). |
-| `agent/` | `state.py`/`actions.py` (the data), `loop.py` (the control flow), `tools/` (registry + local + MCP adapter), `memory/` (short + long term), `verification.py` (rule-based groundedness), `llm_judge.py` (LLM-based groundedness/task-success, shared with evaluation). |
-| `mcp_layer/` | `client.py` (spawns servers as stdio subprocesses, discovery, invocation), `servers/` (two `FastMCP`-style servers). Named `mcp_layer`, not `mcp`, so it never shadows the third-party `mcp` SDK package. |
+| `llm/` | One interface (`generate`, `decide`) over the LLM. `decide` is schema-constrained (Ollama's `format` JSON-schema parameter) and retries a bounded number of times on validation failure. |
+| `rag/` | `documents.py` (load + frontmatter) -> `chunking.py` (paragraph-aware, size + overlap) -> `embeddings.py` (sentence-transformers) -> `vector_index.py` (brute-force cosine, numpy) -> `reranker.py` (cross-encoder) -> `pipeline.py` -> `context_builder.py` (citation tagging). |
+| `agent/` | `state.py` / `actions.py` (the data), `loop.py` (the control flow), `tools/` (registry, local calculator, MCP adapter, `ToolCategory`), `memory/` (short + long term), `evidence.py` (ledger), `verification.py` (citations + numbers), `facts.py` (evidence-scoped fact resolution for rules), `policy.py` (engine + precedence), `budget.py` (allocations + per-run controller), `llm_judge.py` (LLM-judged groundedness / task success, used by evaluation and the multi-agent verifier). |
+| `mcp_layer/` | `client.py` (spawns servers as stdio subprocesses, discovery, invocation), `duckdb_tools.py` (the shared read-only SQL toolkit), `servers/` (knowledge + records). Named `mcp_layer`, not `mcp`, so it never shadows the `mcp` SDK. |
+| `domains.py` | Loads and validates a business domain folder: manifest thresholds and rule names checked against `policies.py`, server path, benchmark path. |
 | `multi_agent/` | `supervisor.py` (delegation + evaluator-optimizer cycle), `workers.py` (Retriever, Researcher), `synthesizer.py`. |
-| `evaluation/` | `dataset.py` (loads `data/benchmark.json`), `rag_metrics.py`, `agent_metrics.py`, `run_eval.py` (orchestrates both modes, prints + persists a report). |
-| `tracing.py` | Human-readable trace printer (`rich`) - debugging/interview tool, not a production observability stack. |
+| `evaluation/` | `dataset.py` (benchmark loader), `rag_metrics.py`, `retrieval_metrics.py` (search efficiency), `agent_metrics.py` (task success, tools, expected-number recall, failures), `run_eval.py`, `budget_experiment.py`, `product_analytics_experiment.py`. |
+| `runtime_factory.py` | Builds single- and multi-agent runtimes identically for scripts, API and evaluations. |
+| `tracing.py` | Human-readable trace printer (`rich`) - a debugging/interview tool, not an observability stack. |
 
 ## Why brute-force vector search, not FAISS/HNSW
 
@@ -173,97 +176,163 @@ registered as a callable tool anywhere an agent could reach it directly
 [runtime_factory.py](src/agent_runtime/runtime_factory.py)). There is now
 exactly one way to search documents, it is protocol-accessed, and it is the
 one path that populates `citation_map` - so nothing can bypass
-verification by choosing a different action type. This is also a stronger
-MCP story than the original design: retrieval, the agent's core
-capability, is now genuinely MCP-mediated, not just an auxiliary tool
-alongside it.
+verification by choosing a different action type.
 
-## Evidence Ledger & Provenance
+## Evidence ledger and provenance
 
-The runtime treats evidence as a first-class citizen. In `agent/evidence.py`, an append-only
-`EvidenceLedger` records every tool execution, statistical test, document excerpt, and calculation
-as an immutable `EvidenceItem`. Each item contains:
-- `evidence_id`: unique prefixed identifier (e.g. `ev-sql-001`, `ev-stat-002`, `ev-rag-003`).
-- `source`: provenance origin (`ANALYTICS_SQL`, `STATISTICS`, `KNOWLEDGE_RAG`, `RECORD_LOOKUP`, `POLICY_RULE`).
-- `kind`: nature of fact (`OBSERVATION`, `CALCULATION`, `RETRIEVAL`).
-- `query_or_input`: exact SQL text, search query, or expression.
-- `data`: structured payload (SQL rows, test metrics, chunk metadata).
-- `summary`: human-readable observation snippet.
+[agent/evidence.py](src/agent_runtime/agent/evidence.py): every successful
+retrieval and tool call appends one `EvidenceItem` to the run's
+`EvidenceLedger`:
 
-Because the ledger is strictly append-only and internal state is never exposed as mutable, the LLM
-cannot rewrite or fabricate observations retroactively.
+- `evidence_id` - prefixed and unique within the run (`ev-sql-001`, `ev-stat-002`, `ev-rag-003`)
+- `source` - `knowledge_rag`, `analytics_sql`, `statistics`, `vision_vlm`, `record_lookup`, `calculator`
+- `kind` - `observation`, `calculation` or `retrieval`
+- `query_or_input` - the SQL, search query or tool arguments
+- `data` - the tool's structured output
+- `summary`, `provenance`, `timestamp`
 
-## Deterministic Policy Engine & Precedence
+`source` comes from the tool's declared `ToolCategory`, not from its name.
 
-Enterprise automation requires that business decisions (e.g., traffic rollouts, budget allocations,
-credit limits) be gated by hard, deterministic rules rather than probabilistic LLM self-evaluation.
-In `agent/policy.py`, the `PolicyEngine` evaluates a `ProposedDecision` using registered Python
-functions (`PolicyRuleFn`).
+The ledger is the trust boundary of the runtime, so its immutability is
+enforced, not assumed: each item's `data` is deep-frozen on construction
+(dicts become read-only mappings, lists become tuples) from a *copy* of the
+tool's output, and exports return fresh copies. An earlier version was a
+frozen dataclass holding a plain dict, which `frozen` does not protect -
+`item.data["p_value"] = 0.9` silently succeeded.
 
-The engine enforces strict deterministic precedence:
+## Budgets are per run
+
+[agent/budget.py](src/agent_runtime/agent/budget.py): an `ActionBudget` is an
+immutable allocation (steps, retrievals, SQL queries, extraction calls). The
+caller picks one - fixed, or by `classify_task_complexity` for adaptive
+budgeting - and `AgentRuntime.run(query, budget=...)` creates a fresh
+`BudgetController` for that run. An earlier version stored one controller on
+the runtime and never reset it, so every later question started with an
+already-spent budget. Exhausted budgets are reported to the model as
+observations ("SQL query budget exhausted...") rather than silently skipped.
+
+## Deterministic numerical verification
+
+[agent/verification.py](src/agent_runtime/agent/verification.py):
+`verify_numerical_grounding()` extracts quantitative claims (percentages,
+percentage points, currency, counts) from the draft and requires each one to
+be supported by a number in evidence, a number in the user's question, or a
+declared policy threshold. Identifiers, versions, dates and ordinals are not
+claims.
+
+- **Rounding-aware tolerance**: "2.9%" accepts 2.85-2.95, nothing looser.
+- **Units**: a percentage claim matches a stored ratio (0.029) or a
+  percent-unit field, never a plain count - "43%" is not grounded by 43
+  purchases. Calculator results are unitless and may ground either.
+- **Derived values**: differences and relative changes are searched only
+  between comparable values (same field, or the same tool output).
+- **Direction**: "fell 1.3 pp" is rejected when evidence holds a signed change
+  of +1.3. A gap derived from two unordered values has no recoverable
+  direction, so only its magnitude is verified - a stated limitation.
+
+It verifies that numbers exist in evidence at a compatible scale, not that
+each is attached to the right concept; decisions therefore never rely on the
+answer text (next section).
+
+A rejected answer becomes an observation telling the model what failed, and
+the loop continues. On the very last step an unverified answer is accepted as
+best effort, but marked `answer_verified=False` - and the policy engine then
+refuses to auto-approve any decision attached to it.
+
+## Policy engine: facts from evidence, fail closed
+
+[agent/policy.py](src/agent_runtime/agent/policy.py) evaluates a
+`ProposedDecision` with registered rule functions and strict precedence:
+
 $$\text{BLOCKED} > \text{REQUIRES\_APPROVAL} > \text{ALLOWED}$$
 
-If any rule produces `BLOCKED`, the final decision is blocked regardless of other approvals. If any rule
-produces `REQUIRES_APPROVAL` and none block, human sign-off is mandated. Only when all rules pass is the
-proposal `ALLOWED`. Crucially, this evaluation contains zero LLM calls.
+One `BLOCKED` result blocks the decision however many rules allow it, so
+adding a rule can only make the system more restrictive; an ALLOWED rule is a
+no-op. The engine fails closed: a rule that raises counts as `BLOCKED`, a rule
+result whose `passed` flag contradicts its status is read restrictively, a
+proposal citing evidence ids the ledger does not contain is `BLOCKED`, and a
+decision attached to an unverified answer needs approval.
 
-## Deterministic Numerical Verification
+The domain rules are where the most serious bugs were. They used to read
+facts from the proposal first (so `{"credit_score": 700}` in the model's own
+parameters overrode a 600 in the database, and `{"override_authorized": true}`
+lifted a production freeze), otherwise took the first matching number in the
+ledger regardless of which account or invoice it belonged to, and treated a
+missing fact as "no violation". They now use
+[agent/facts.py](src/agent_runtime/agent/facts.py):
 
-In business and analytical workflows, hallucinations often manifest as distorted numbers, inverted
-percentage trends, or invented metrics. In `agent/verification.py`, `verify_numerical_grounding()`
-extracts all quantitative claims (percentages, percentage points, currencies, counts) from the draft
-answer and reconciles them deterministically against facts in the `EvidenceLedger`.
-It supports:
-- Scale alignment ($0.0293$ matches $2.9\%$)
-- Percentage point difference validation
-- Direction validation (preventing "fell" from matching an increase)
-- Rejection of ungrounded figures before the agent can terminate.
+- The proposal only names the **target** (account, invoice, service,
+  experiment) and the action's **own quantities** (increase amount, traffic
+  percentage). Where evidence also speaks to a quantity, the stricter value
+  wins.
+- Facts are resolved **per entity**: a value counts for ACCT-104 only if it
+  sits inside a record carrying `account_id = ACCT-104`.
+- **Evidence may restrict on weak grounds but permit only on strong ones**:
+  any violating candidate value blocks, even one that cannot be attributed to
+  the entity; allowing requires one agreed value attributed to the target.
+- A fact the evidence does not establish means `REQUIRES_APPROVAL`.
+- Rules apply to the actions they govern, and an unrecognised action name is
+  governed (the old exact-string list let "grant_limit_raise" skip every
+  credit rule).
 
-## Multi-Domain Extensibility: The 4 Enterprise Domains
+## Business domains
 
-To ensure the runtime remains fundamentally domain-agnostic, domain-specific assets are segregated under `domains/<domain_name>/`:
-- `domain_manifest.yaml`: declared tools, parameters, and deterministic policy rule thresholds.
-- Data stores & schemas: DuckDB databases, JSON document models, visual charts, and telemetry.
-- `policies.py`: deterministic policy rule definitions enforcing domain compliance.
-- `benchmark.json`: comprehensive evaluation questions with expected tools, numbers, and policy outcomes.
+Each domain is a self-contained folder, loaded by
+[agent_runtime/domains.py](src/agent_runtime/domains.py):
 
-The core runtime in `src/agent_runtime/` remains completely generic, interacting with domains strictly through MCP protocol interfaces and standard data contracts:
+```
+domains/<name>/
+  domain_manifest.yaml   title, thresholds, documented rules, decision guide for the model
+  server.py              the domain's MCP server
+  policies.py            REQUIRED_THRESHOLDS + create_policy_engine(thresholds)
+  benchmark.json         evaluation questions (expected numbers, expected policy status)
+  data/                  DuckDB databases, JSON fixtures, generators
+```
 
-1. **Product Analytics & Experimentation** (`domains/product_analytics/`):
-   - *MCP Server*: `analytics_server.py` exposing `execute_sql`, `describe_tables`, `test_significance`.
-   - *Data Warehouse*: DuckDB database with `daily_checkout_metrics`, `funnel_dropoff`, `experiments`, and `experiment_results`.
-   - *Statistical Engine*: SciPy pooled two-proportion hypothesis z-test calculating z-statistics, p-values, and 95% confidence intervals.
-   - *Governance*: `statistical_significance_gate` (blocks rollout if $p \ge 0.05$) and `high_impact_rollout_approval` (requires human approval if traffic $> 50\%$).
+The manifest is no longer documentation that merely *looks* like
+configuration: its thresholds are the values the code enforces, and the
+loader rejects missing or unknown thresholds and any mismatch between
+documented and implemented rule names. (The old manifests had drifted: the
+product analytics one said rollouts above 20% need approval while the code
+enforced 50%, and the operations one described a rule no code implemented.)
+The core runtime has no domain-specific code; each domain contributes a
+server, rules and a short decision guide.
 
-2. **Credit Risk & Lending Underwriting** (`domains/credit_risk/`):
-   - *MCP Server*: `credit_risk_server.py` exposing read-only DuckDB operations and `get_account_profile` dossier lookups.
-   - *Data Warehouse*: DuckDB database with `accounts`, `credit_history`, `limit_requests`, and `bureau_inquiries`.
-   - *Governance*: `minimum_credit_score` (blocks if FICO $< 650$), `hard_delinquency_cutoff` (blocks if 90d delinquencies $> 0$), `dti_ceiling` (blocks if DTI $> 43\%$), and `high_limit_increase_approval` (requires underwriter approval if increase $> \$5,000$).
-
-3. **Multimodal Business Investigation** (`domains/multimodal_investigation/`):
-   - *MCP Server*: `vision_server.py` exposing `extract_document_metrics`, `analyze_chart_data`, and `list_visual_artifacts`.
-   - *Data Assets*: Scanned invoice JSON documents with OCR layout sidecars and time-series telemetry / funnel charts.
-   - *Governance*: `invoice_math_reconciliation` (blocks on arithmetic mismatch $> \$0.01$), `duplicate_invoice_prevention` (blocks re-submitted/settled claims), `executive_expense_approval` (escalates if total $> \$1,000$), and `sla_breach_detection` (flags commercial penalty reviews if uptime $< 99.90\%$).
-
-4. **Enterprise Systems Operations** (`domains/enterprise_operations/`):
-   - *MCP Server*: `ops_server.py` exposing `get_incident_telemetry`, `inspect_service_config`, and `simulate_remediation_action`.
-   - *Data Assets*: Production incident registries (`incidents.json`) and deployment configurations (`service_configs.json`).
-   - *Governance*: `production_blast_radius_cap` (escalates if blast radius $> 25\%$), `active_p0_incident_freeze` (blocks routine mutations during active P0 outages), `security_baseline_compliance` (blocks TLS $< 1.3$ or exposed debug ports), and `safe_automated_restart` (allows low-impact restarts $\le 10\%$).
+1. **Product analytics** - DuckDB checkout metrics, funnel drop-off and A/B
+   results; a two-proportion z-test. Rules: a rollout needs the named
+   experiment's p-value below alpha *and* the treatment ahead of control;
+   more than 50% of traffic needs approval.
+2. **Credit risk** - DuckDB accounts, credit history, limit requests,
+   inquiries. Rules: score below 650, any 90-day delinquency, or DTI above
+   43% blocks; an increase above $5,000 needs approval.
+3. **Multimodal investigation** - invoices and charts as pre-extracted JSON
+   fixtures (no image model runs; the tools compute invoice arithmetic and
+   SLA status from the extracted fields). Rules for payments: line items and
+   subtotal + tax must reconcile to the cent, duplicates and settled invoices
+   are blocked, totals above $1,000 need approval. For SLA penalties: a
+   monthly average below the contractual threshold needs commercial review.
+4. **Enterprise operations** - incident registry and service configurations.
+   Rules: changes to a service with an active, un-overridden P0 are blocked
+   ("no active P0" must come from a complete incident listing); blast radius
+   above 25% needs approval unless an emergency override covers it;
+   deployments of services with TLS below 1.3 or an open debug port are
+   blocked.
 
 ## Concurrency model
 
 The whole runtime is `async` end-to-end (LLM calls, tool execution, MCP
 client calls) rather than sync-with-a-thread-bridge. Embedding and
-reranking (sentence-transformers/CPU) are the one exception - they're
-called synchronously from within async functions, which blocks the event
-loop for a few milliseconds per call. For a single-user local project with
-no concurrent requests, that's a non-issue; a concurrent-request server
-would run them in a thread pool executor instead.
+reranking (sentence-transformers on CPU) are the exception - they are called
+synchronously inside async functions and block the event loop briefly. That
+is acceptable for a local project; a concurrent server would move them to a
+thread pool. The FastAPI wrapper shares one runtime between requests, so it
+resets the conversation at the start of every request and disables long-term
+memory (see `api.py`).
 
 ## Known simplifications
 
 See the README's "Known simplifications" section - repeated here only
 where it's an architectural decision rather than a setup note: no
 persisted vector index (rebuilt in-memory per run), and each MCP server
-subprocess builds its own RAG pipeline independently (no shared memory
-between processes - see MCP.md).
+subprocess builds its own state independently (no shared memory between
+processes - see MCP.md).

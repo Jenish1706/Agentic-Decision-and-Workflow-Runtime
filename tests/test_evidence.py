@@ -1,4 +1,5 @@
 import pytest
+
 from agent_runtime.agent.evidence import EvidenceItem, EvidenceKind, EvidenceLedger, EvidenceSource
 
 
@@ -119,6 +120,42 @@ def test_derived_evidence_and_parents():
             summary="",
             parent_evidence_ids=["ev-fake-999"],
         )
+
+
+def test_evidence_cannot_be_rewritten_after_it_is_recorded():
+    # Regression: items were `frozen=True` but kept a plain dict inside, so
+    # `item.data["p_value"] = 0.9` silently succeeded.
+    payload = {"p_value": 0.01, "rows": [{"n": 1}]}
+    ledger = EvidenceLedger()
+    item = ledger.add(source=EvidenceSource.STATISTICS, query_or_input="q", data=payload, provenance="t", summary="")
+
+    with pytest.raises(TypeError):
+        item.data["p_value"] = 0.9  # type: ignore[index]
+    with pytest.raises(AttributeError):
+        item.data["rows"].append({"n": 2})  # lists are frozen into tuples
+
+    payload["p_value"] = 0.9  # the tool mutating its own result afterwards
+    assert ledger.all()[0].data["p_value"] == 0.01
+
+    exported = item.to_dict()["data"]
+    exported["p_value"] = 0.9  # exports are copies
+    assert item.data["p_value"] == 0.01
+
+
+def test_automatic_ids_skip_ids_supplied_by_callers():
+    # Regression: automatic ids were recounted from the item list and could
+    # collide with a caller-supplied id, raising "already exists" mid-run.
+    ledger = EvidenceLedger()
+    ledger.add(source=EvidenceSource.ANALYTICS_SQL, query_or_input="q", data={}, provenance="", summary="", evidence_id="ev-sql-002")
+    first = ledger.add(source=EvidenceSource.ANALYTICS_SQL, query_or_input="q", data={}, provenance="", summary="")
+    second = ledger.add(source=EvidenceSource.ANALYTICS_SQL, query_or_input="q", data={}, provenance="", summary="")
+    assert (first.evidence_id, second.evidence_id) == ("ev-sql-001", "ev-sql-003")
+
+
+def test_extract_numerical_facts_skips_booleans():
+    ledger = EvidenceLedger()
+    ledger.add(source=EvidenceSource.STATISTICS, query_or_input="q", data={"significant": True, "p": 0.01}, provenance="", summary="")
+    assert ledger.extract_numerical_facts() == {"ev-stat-001.p": 0.01}
 
 
 def test_extract_numerical_facts():

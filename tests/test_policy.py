@@ -1,5 +1,6 @@
 import pytest
 from pydantic import ValidationError
+
 from agent_runtime.agent.evidence import EvidenceLedger, EvidenceSource
 from agent_runtime.agent.policy import (
     DecisionContext,
@@ -10,113 +11,80 @@ from agent_runtime.agent.policy import (
 )
 
 
-def test_proposed_decision_validation():
-    # Valid proposal
-    p = ProposedDecision(
-        intent="Rollout feature",
-        recommended_action="Deploy variant B to 100% traffic",
-        parameters={"variant": "B", "rollout_pct": 100},
-        reasoning="Variant B showed 12% lift with p=0.002",
-        supporting_evidence_ids=["ev-sql-001"],
-        confidence=0.95,
-    )
-    assert p.confidence == 0.95
+def _proposal(**overrides) -> ProposedDecision:
+    fields = {"intent": "Act", "recommended_action": "do_x", "reasoning": "Because", "confidence": 0.8}
+    return ProposedDecision(**(fields | overrides))
 
-    # Out of range confidence should fail
+
+def _allowed(proposal, ctx):
+    return PolicyRuleResult.allowed("syntax_check", "fine")
+
+
+def _approval(proposal, ctx):
+    return PolicyRuleResult.requires_approval("budget_threshold", "needs a manager")
+
+
+def _blocked(proposal, ctx):
+    return PolicyRuleResult.blocked("compliance_check", "violates policy")
+
+
+def test_confidence_validation_and_percentage_rescaling():
+    assert _proposal(confidence=0.95).confidence == 0.95
+    # Small local models write 85 for 0.85; rejecting it would invalidate the whole step.
+    assert _proposal(confidence=85).confidence == pytest.approx(0.85)
     with pytest.raises(ValidationError):
-        ProposedDecision(
-            intent="Test",
-            recommended_action="Do X",
-            reasoning="Reason",
-            confidence=1.5,
-        )
+        _proposal(confidence=1.5)  # more plausibly a 0-1 mistake than "1.5 percent"
 
 
-def test_policy_engine_allowed_flow():
-    engine = PolicyEngine()
+def test_no_rules_allows():
+    evaluation = PolicyEngine().evaluate(_proposal())
+    assert evaluation.is_allowed and evaluation.enforced_action == "do_x"
+
+
+def test_citing_evidence_that_does_not_exist_blocks():
     ledger = EvidenceLedger()
-    ledger.add(
-        source=EvidenceSource.ANALYTICS_SQL,
-        query_or_input="q",
-        data={"metric": 1},
-        provenance="table",
-        summary="",
-        evidence_id="ev-sql-001",
-    )
+    ledger.add(source=EvidenceSource.ANALYTICS_SQL, query_or_input="q", data={"m": 1}, provenance="t", summary="", evidence_id="ev-sql-001")
+    context = DecisionContext(subject_or_entity="t", evidence_ledger=ledger)
 
-    proposal = ProposedDecision(
-        intent="Optimize checkout",
-        recommended_action="Update checkout button color",
-        reasoning="Evidence supports change",
-        supporting_evidence_ids=["ev-sql-001"],
-        confidence=0.85,
-    )
-    context = DecisionContext(subject_or_entity="checkout", evidence_ledger=ledger)
-    evaluation = engine.evaluate(proposal, context)
-
-    assert evaluation.is_allowed
-    assert evaluation.final_status == PolicyStatus.ALLOWED
-    assert evaluation.enforced_action == proposal.recommended_action
+    assert PolicyEngine().evaluate(_proposal(supporting_evidence_ids=["ev-sql-001"]), context).is_allowed
+    ghost = PolicyEngine().evaluate(_proposal(supporting_evidence_ids=["ev-sql-999"]), context)
+    assert ghost.is_blocked and "non-existent evidence" in ghost.audit_notes
 
 
-def test_policy_engine_missing_evidence_blocks():
-    engine = PolicyEngine()
-    ledger = EvidenceLedger()  # Empty ledger
+def test_precedence_blocked_over_approval_over_allowed():
+    assert PolicyEngine([_allowed, _approval, _blocked]).evaluate(_proposal()).final_status == PolicyStatus.BLOCKED
+    assert PolicyEngine([_allowed, _approval]).evaluate(_proposal()).final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert PolicyEngine([_allowed]).evaluate(_proposal()).final_status == PolicyStatus.ALLOWED
 
-    proposal = ProposedDecision(
-        intent="Action",
-        recommended_action="Action X",
-        reasoning="Reasoning citing ghost evidence",
-        supporting_evidence_ids=["ev-nonexistent-999"],
-        confidence=0.8,
-    )
-    context = DecisionContext(subject_or_entity="test", evidence_ledger=ledger)
-    evaluation = engine.evaluate(proposal, context)
 
+def test_a_crashing_rule_fails_closed():
+    def broken(proposal, ctx):
+        raise KeyError("threshold")
+
+    evaluation = PolicyEngine([_allowed, broken]).evaluate(_proposal())
     assert evaluation.is_blocked
-    assert evaluation.final_status == PolicyStatus.BLOCKED
-    assert any("non-existent evidence" in r.message for r in evaluation.rule_results)
+    assert "raised error" in evaluation.audit_notes
 
 
-def test_policy_precedence_blocked_over_approval_over_allowed():
-    def approval_rule(prop, ctx):
-        return PolicyRuleResult(
-            rule_name="budget_threshold",
-            passed=False,
-            status=PolicyStatus.REQUIRES_APPROVAL,
-            message="Budget change over 10% requires manager approval",
-        )
+def test_inconsistent_rule_result_is_read_restrictively():
+    def says_failed_but_allowed(proposal, ctx):
+        return PolicyRuleResult(rule_name="buggy", passed=False, status=PolicyStatus.ALLOWED, message="?")
 
-    def blocked_rule(prop, ctx):
-        return PolicyRuleResult(
-            rule_name="compliance_check",
-            passed=False,
-            status=PolicyStatus.BLOCKED,
-            message="Violates hard security policy",
-        )
+    evaluation = PolicyEngine([says_failed_but_allowed]).evaluate(_proposal())
+    assert evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "inconsistent rule result" in evaluation.audit_notes
 
-    def passing_rule(prop, ctx):
-        return PolicyRuleResult(
-            rule_name="syntax_check",
-            passed=True,
-            status=PolicyStatus.ALLOWED,
-            message="Syntax is valid",
-        )
 
-    # When both approval and blocked fail, BLOCKED takes precedence
-    engine = PolicyEngine(rules=[passing_rule, approval_rule, blocked_rule])
-    proposal = ProposedDecision(
-        intent="High stakes action",
-        recommended_action="Execute transfer",
-        reasoning="Reason",
-        confidence=0.9,
-    )
-    eval_blocked = engine.evaluate(proposal)
-    assert eval_blocked.is_blocked
-    assert eval_blocked.final_status == PolicyStatus.BLOCKED
+def test_unverified_answer_cannot_auto_approve():
+    context = DecisionContext(subject_or_entity="t", metadata={"answer_verified": False})
+    evaluation = PolicyEngine([_allowed]).evaluate(_proposal(), context)
+    assert evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "decision_verification_gate" in evaluation.audit_notes
 
-    # When only approval fails, REQUIRES_APPROVAL takes precedence over ALLOWED
-    engine_approval = PolicyEngine(rules=[passing_rule, approval_rule])
-    eval_approval = engine_approval.evaluate(proposal)
-    assert eval_approval.requires_approval
-    assert eval_approval.final_status == PolicyStatus.REQUIRES_APPROVAL
+
+def test_rule_names_and_thresholds_are_exposed():
+    engine = PolicyEngine([_allowed, _blocked], thresholds={"limit": 5})
+    assert engine.rule_names == ["_allowed", "_blocked"]
+    assert dict(engine.thresholds) == {"limit": 5}
+    with pytest.raises(TypeError):
+        engine.thresholds["limit"] = 6  # read-only

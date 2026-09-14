@@ -1,76 +1,58 @@
 import pytest
-from agent_runtime.mcp_layer.servers.analytics_server import (
-    describe_tables,
-    execute_sql,
-    test_significance as run_significance_test,
-)
+
+from domains.product_analytics.server import describe_tables, execute_sql
+from domains.product_analytics.server import test_significance as significance_test
 
 
 def test_describe_tables():
-    res = describe_tables()
-    assert "daily_checkout_metrics" in res.tables
-    assert "experiments" in res.tables
-    assert "experiment_results" in res.tables
-    assert "funnel_dropoff" in res.tables
-    assert len(res.summary) > 0
+    result = describe_tables()
+    assert {"daily_checkout_metrics", "experiments", "experiment_results", "funnel_dropoff"} <= set(result.tables)
+    assert result.summary
 
 
-def test_execute_sql_valid_select_and_cte():
-    # Basic SELECT
-    res = execute_sql("SELECT COUNT(*) as total_rows FROM daily_checkout_metrics")
-    assert res.ok
-    assert res.row_count == 1
-    assert "total_rows" in res.columns
+def test_select_and_cte_queries():
+    count = execute_sql("SELECT COUNT(*) AS total_rows FROM daily_checkout_metrics")
+    assert count.ok and count.row_count == 1 and count.columns == ["total_rows"]
 
-    # CTE query
-    cte_query = """
-    WITH mobile_data AS (
-        SELECT device, AVG(conversion_rate) as avg_conv
-        FROM daily_checkout_metrics
-        WHERE device = 'mobile'
-        GROUP BY device
+    cte = execute_sql(
+        """
+        WITH mobile AS (
+            SELECT device, AVG(conversion_rate) AS avg_conv FROM daily_checkout_metrics
+            WHERE device = 'mobile' GROUP BY device
+        )
+        SELECT * FROM mobile
+        """
     )
-    SELECT * FROM mobile_data
-    """
-    cte_res = execute_sql(cte_query)
-    assert cte_res.ok
-    assert cte_res.row_count == 1
-    assert cte_res.rows[0]["device"] == "mobile"
+    assert cte.ok and cte.rows[0]["device"] == "mobile"
 
 
-def test_execute_sql_rejects_destructive_and_external_operations():
-    # DROP
-    drop_res = execute_sql("DROP TABLE experiments")
-    assert not drop_res.ok
-    assert "Disallowed operations" in drop_res.error
-
-    # DELETE
-    del_res = execute_sql("DELETE FROM daily_checkout_metrics WHERE 1=1")
-    assert not del_res.ok
-    assert "Disallowed operations" in del_res.error
-
-    # INSERT
-    ins_res = execute_sql("INSERT INTO experiments VALUES ('EXP-999')")
-    assert not ins_res.ok
-
-    # UPDATE
-    upd_res = execute_sql("UPDATE experiments SET name='Hacked'")
-    assert not upd_res.ok
-
-    # Non-SELECT / Non-WITH statement
-    bad_stmt = execute_sql("PRAGMA version")
-    assert not bad_stmt.ok
+def test_writes_and_non_select_statements_are_rejected():
+    for statement in (
+        "DROP TABLE experiments",
+        "DELETE FROM daily_checkout_metrics WHERE 1=1",
+        "INSERT INTO experiments VALUES ('EXP-999')",
+        "UPDATE experiments SET name='Hacked'",
+        "PRAGMA version",
+    ):
+        assert not execute_sql(statement).ok, statement
 
 
-def test_hypothesis_testing_significance():
-    sig = run_significance_test("EXP-204", alpha=0.05)
-    assert sig.experiment_id == "EXP-204"
-    assert sig.sample_size_a == 1500
-    assert sig.sample_size_b == 1500
-    assert sig.conversions_a == 24
-    assert sig.conversions_b == 44
-    assert sig.rate_a == 0.016
-    assert round(sig.rate_b, 3) == 0.029
-    assert sig.difference_pp > 1.0
-    assert sig.p_value < 0.05
-    assert sig.significant is True
+def test_significance_matches_the_experiment_data():
+    result = significance_test("EXP-204")
+    assert (result.sample_size_a, result.conversions_a, result.sample_size_b, result.conversions_b) == (1500, 24, 1500, 44)
+    assert (result.control_variant, result.treatment_variant) == ("A", "B")
+    assert result.rate_a == 0.016 and result.rate_b == 0.0293
+    assert result.difference_pp == pytest.approx(1.333, abs=1e-3)
+    assert 0.01 < result.p_value < 0.05
+    assert result.significant and result.treatment_better
+    low, high = result.confidence_interval_95
+    assert low < result.difference_pp < high
+
+
+def test_significance_input_validation():
+    with pytest.raises(ValueError, match="exactly 2 variants"):
+        significance_test("EXP-999")
+    with pytest.raises(ValueError, match="alpha"):
+        significance_test("EXP-204", alpha=0.0)
+    with pytest.raises(TypeError):
+        significance_test()  # type: ignore[call-arg]  # no silent default experiment any more

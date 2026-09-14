@@ -25,5 +25,8 @@ class Reranker:
             return []
         pairs = [(query, text) for _, text in candidates]
         scores = self._model.predict(pairs)
-        ranked = sorted(zip((c[0] for c in candidates), scores), key=lambda pair: -pair[1])
+        # strict=True: one score per candidate is an invariant; if the model
+        # ever returned fewer, silently dropping candidates would be worse
+        # than failing.
+        ranked = sorted(zip((c[0] for c in candidates), scores, strict=True), key=lambda pair: -pair[1])
         return [(chunk_id, float(score)) for chunk_id, score in ranked[:top_n]]

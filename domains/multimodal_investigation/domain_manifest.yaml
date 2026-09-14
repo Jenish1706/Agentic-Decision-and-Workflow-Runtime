@@ -1,30 +1,36 @@
+# Domain manifest, read by agent_runtime/domains.py.
+#
+# `thresholds` are the numbers policies.py enforces; the loader rejects a
+# manifest with a missing or unknown threshold. `policy_rules` documents each
+# rule, and the loader checks these names against the rules the code registers,
+# so this file cannot silently drift from what actually runs.
 name: multimodal_investigation
 title: "Multimodal Business Operations & Document Audit"
-description: "Visual document extraction, scanned invoice auditing, telemetry chart analysis, and deterministic financial governance."
+description: "Invoice document extraction, telemetry chart analysis, and payment / SLA penalty governance. Extraction is simulated over pre-extracted JSON fixtures."
 
-active_tools:
-  - vision.extract_document_metrics
-  - vision.analyze_chart_data
-  - vision.list_visual_artifacts
-  - local.calculator
+# Shown to the model with the decision rules: the action and parameter names
+# the rules understand, and the evidence they read. It never changes a verdict.
+decision_guide: |
+  Payments: use recommended_action "approve_payment" with parameter document_id (for example
+  "INV-2026-001"). The rules read the invoice's subtotal, tax_amount, total_amount, line_items,
+  is_duplicate and settlement_status from extract_document_metrics.
+  SLA penalties: use recommended_action "apply_penalty_credit" with parameter artifact_id (the chart
+  id or name, for example "latency_sla_september"). The rules read the chart's monthly average
+  uptime and contractual SLA threshold from analyze_chart_data.
+
+thresholds:
+  max_autonomous_expense: 1000  # dollars
 
 policy_rules:
   - name: invoice_math_reconciliation
-    condition: "abs((subtotal + tax_amount) - total_amount) > 0.01"
-    action: BLOCKED
-    description: "Line item subtotal plus tax must reconcile exactly with invoice total. Discrepancies indicate tampering or billing error."
-
+    on_violation: BLOCKED
+    description: "For payments, line items must sum to the subtotal and subtotal plus tax must equal the billed total (to the cent)."
   - name: duplicate_invoice_prevention
-    condition: "invoice_status == 'already_paid' or is_duplicate == true"
-    action: BLOCKED
-    description: "Duplicate or previously settled invoices cannot be approved for payment."
-
+    on_violation: BLOCKED
+    description: "Invoices flagged as duplicates or already settled cannot be paid."
   - name: executive_expense_approval
-    condition: "total_amount > 1000.0"
-    action: REQUIRES_APPROVAL
-    description: "Expenses exceeding $1,000 require executive authorization before disbursement."
-
+    on_violation: REQUIRES_APPROVAL
+    description: "Payments above max_autonomous_expense dollars require executive authorization."
   - name: sla_breach_detection
-    condition: "min_uptime_pct < 99.90"
-    action: REQUIRES_APPROVAL
-    description: "Service uptime dipping below 99.90% represents an SLA breach requiring commercial penalty credit calculation."
+    on_violation: REQUIRES_APPROVAL
+    description: "For SLA penalty actions, a monthly average uptime below the chart's contractual threshold requires commercial review; no breach blocks the penalty."

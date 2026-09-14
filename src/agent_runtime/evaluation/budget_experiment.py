@@ -30,12 +30,17 @@ from rich.table import Table
 from ..config import settings
 from ..llm.ollama_client import OllamaClient
 from ..runtime_factory import build_single_agent_runtime
-from .agent_metrics import single_agent_failed, single_agent_tool_names
+from .agent_metrics import (
+    count_unnecessary_tool_calls,
+    score_task_success,
+    score_tool_selection,
+    single_agent_failed,
+    single_agent_tool_names,
+)
 from .dataset import EvalQuery, load_benchmark
 from .rag_metrics import score_citation_correctness, score_groundedness
 from .retrieval_metrics import score_search_efficiency
 from .run_eval import _aggregate, _judged
-from .agent_metrics import count_unnecessary_tool_calls, score_task_success, score_tool_selection
 
 console = Console()
 
@@ -53,6 +58,8 @@ async def run_condition(
     async with build_single_agent_runtime(with_memory=False, max_retrievals=budget) as runtime:
         for position, q in enumerate(queries, start=1):
             console.print(f"  [budget={_label(budget)} {position}/{len(queries)}] {q.id}")
+            # Independent questions: see the note in run_eval.run_single_agent.
+            runtime.reset_session()
             start = time.perf_counter()
             state = await runtime.run(q.question)
             latency = time.perf_counter() - start

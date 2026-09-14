@@ -1,5 +1,5 @@
-from agent_runtime.rag.documents import Chunk
 from agent_runtime.agent.verification import verify_citations
+from agent_runtime.rag.documents import Chunk
 
 
 def _chunk(doc_id: str) -> Chunk:

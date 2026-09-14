@@ -1,11 +1,11 @@
 import pytest
 
-from agent_runtime.agent.actions import ActionDecision, ActionType
+from agent_runtime.agent.actions import ActionDecision, ActionType, DecisionExtraction
 from agent_runtime.agent.loop import AgentRuntime
+from agent_runtime.agent.policy import PolicyEngine, PolicyRuleResult, ProposedDecision
 from agent_runtime.agent.state import TerminationReason
 from agent_runtime.agent.tools.calculator import CalculatorTool
 from agent_runtime.agent.tools.registry import ToolRegistry
-from agent_runtime.rag.context_builder import build_context
 from agent_runtime.rag.documents import Chunk
 
 from .fakes import FakeLLMClient, raises_llm_error
@@ -101,6 +101,86 @@ async def test_retrieve_with_empty_query_falls_back_to_original_question():
     assert rag.queries_seen == ["what is the aurora rate limit?"]
 
 
+def _allow_everything(proposal, ctx):
+    return PolicyRuleResult.allowed("allow_everything", "ok")
+
+
+@pytest.mark.asyncio
+async def test_unattached_decision_is_recovered_and_judged_by_policy():
+    # Measured with qwen2.5:7b: the model usually describes a decision in prose
+    # and leaves `proposed_decision` null, so policy never ran.
+    llm = FakeLLMClient(
+        decisions=[
+            ActionDecision(thought="answer", action=ActionType.FINAL, answer="Approve the request for ACCT-101."),
+            DecisionExtraction(
+                asks_for_decision=True,
+                recommended_action="approve_increase",
+                parameters={"account_id": "ACCT-101"},
+                reasoning="The answer approves it.",
+                confidence=90,
+            ),
+        ]
+    )
+    runtime = AgentRuntime(llm=llm, tools=ToolRegistry(), policy_engine=PolicyEngine([_allow_everything]))
+    state = await runtime.run("Should we approve ACCT-101's increase?")
+
+    assert state.proposed_decision.recommended_action == "approve_increase"
+    assert state.proposed_decision.confidence == pytest.approx(0.9)
+    assert state.proposed_decision_source == "extracted"
+    assert state.policy_evaluation is not None
+    assert state.audit_trace["proposed_decision_source"] == "extracted"
+
+
+@pytest.mark.asyncio
+async def test_no_decision_is_invented_for_a_factual_question():
+    llm = FakeLLMClient(
+        decisions=[
+            ActionDecision(thought="answer", action=ActionType.FINAL, answer="The service is healthy."),
+            DecisionExtraction(asks_for_decision=False, recommended_action="", parameters={}, reasoning="", confidence=0.0),
+        ]
+    )
+    runtime = AgentRuntime(llm=llm, tools=ToolRegistry(), policy_engine=PolicyEngine([_allow_everything]))
+    state = await runtime.run("Is the service healthy?")
+
+    assert state.proposed_decision is None and state.policy_evaluation is None
+
+
+@pytest.mark.asyncio
+async def test_failed_extraction_keeps_the_answer():
+    llm = FakeLLMClient(
+        decisions=[ActionDecision(thought="answer", action=ActionType.FINAL, answer="Approve it."), raises_llm_error()]
+    )
+    runtime = AgentRuntime(llm=llm, tools=ToolRegistry(), policy_engine=PolicyEngine([_allow_everything]))
+    state = await runtime.run("Should we approve it?")
+
+    assert state.termination_reason == TerminationReason.FINAL_ANSWER
+    assert state.final_answer == "Approve it."
+    assert state.policy_evaluation is None
+
+
+@pytest.mark.asyncio
+async def test_attached_decision_needs_no_extraction_call():
+    proposal = ProposedDecision(intent="i", recommended_action="approve", reasoning="r", confidence=0.8)
+    llm = FakeLLMClient(
+        decisions=[ActionDecision(thought="answer", action=ActionType.FINAL, answer="Approve it.", proposed_decision=proposal)]
+    )
+    runtime = AgentRuntime(llm=llm, tools=ToolRegistry(), policy_engine=PolicyEngine([_allow_everything]))
+    state = await runtime.run("Should we approve it?")
+
+    assert len(llm.decide_calls) == 1  # the scripted LLM would raise if a second call were made
+    assert state.proposed_decision_source == "final_step"
+
+
+def test_citation_rule_is_only_prompted_when_retrieval_exists():
+    # Found in a real run: a tool-only agent told to "cite retrieved documents
+    # using [n] tags" appended invented tags to a SQL-based answer.
+    tool_only = AgentRuntime(llm=FakeLLMClient(), tools=ToolRegistry(), rag=None)
+    with_rag = AgentRuntime(llm=FakeLLMClient(), tools=ToolRegistry(), rag=_StubRag())
+    assert "[n] tags" not in tool_only._system_prompt(max_steps=5)
+    assert '"retrieve"' not in tool_only._system_prompt(max_steps=5)
+    assert "[n] tags" in with_rag._system_prompt(max_steps=5)
+
+
 @pytest.mark.asyncio
 async def test_retrieve_unavailable_when_rag_is_none():
     llm = FakeLLMClient(
@@ -189,13 +269,17 @@ async def test_memory_write_failure_does_not_discard_a_good_answer():
         async def maybe_store(self, llm, query, answer):
             raise raises_llm_error()
 
+    # A non-numeric answer on purpose: this test is about memory-write
+    # failures, and an ungrounded number would (correctly) be rejected by
+    # numerical verification before memory is ever reached.
     llm = FakeLLMClient(
-        decisions=[ActionDecision(thought="done", action=ActionType.FINAL, answer="The answer is 42.")]
+        decisions=[ActionDecision(thought="done", action=ActionType.FINAL, answer="The service is healthy.")]
     )
     runtime = AgentRuntime(llm=llm, tools=ToolRegistry(), rag=None, long_term=_FailingLongTerm(), max_steps=5)
     state = await runtime.run("some question")
     assert state.termination_reason == TerminationReason.FINAL_ANSWER
-    assert state.final_answer == "The answer is 42."
+    assert state.final_answer == "The service is healthy."
+    assert state.answer_verified is True
 
 
 @pytest.mark.asyncio
@@ -255,3 +339,6 @@ async def test_ungrounded_final_on_last_step_is_accepted_anyway():
     state = await runtime.run("what is the limit?")
     assert state.termination_reason == TerminationReason.FINAL_ANSWER
     assert state.final_answer == "It's 5000 [1]."
+    # Accepted, but never mistaken for a verified answer.
+    assert state.answer_verified is False
+    assert state.verification_issues

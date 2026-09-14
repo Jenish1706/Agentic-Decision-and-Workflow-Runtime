@@ -1,36 +1,36 @@
+# Domain manifest, read by agent_runtime/domains.py.
+#
+# `thresholds` are the numbers policies.py enforces; the loader rejects a
+# manifest with a missing or unknown threshold. `policy_rules` documents each
+# rule, and the loader checks these names against the rules the code registers,
+# so this file cannot silently drift from what actually runs.
 name: credit_risk
 title: "Consumer & Small Business Credit Underwriting"
-description: "Account profiles, credit bureau telemetry, debt-to-income analytics, and deterministic credit limit increase governance."
+description: "Account profiles, credit bureau history, debt-to-income analysis, and credit limit increase governance."
 
-database:
-  engine: duckdb
-  path: data/credit_risk.duckdb
-  read_only: true
-  enable_external_access: false
+# Shown to the model with the decision rules: the action and parameter names
+# the rules understand, and the evidence they read. It never changes a verdict.
+decision_guide: |
+  Decisions here are credit limit increases. Use recommended_action "approve_increase" with
+  parameters account_id (for example "ACCT-101") and increase_amount (the dollar increase requested).
+  The rules read that account's credit_score, delinquencies_90d and dti_ratio, and its requested
+  increase_amount, from your evidence: get_account_profile returns all of them in one call.
 
-active_tools:
-  - credit_risk.execute_sql
-  - credit_risk.describe_tables
-  - credit_risk.get_account_profile
-  - local.calculator
+thresholds:
+  min_credit_score: 650
+  max_dti_ratio: 0.43            # a fraction: 0.43 = 43%
+  max_autonomous_increase: 5000  # dollars
 
 policy_rules:
   - name: minimum_credit_score
-    condition: "credit_score < 650"
-    action: BLOCKED
-    description: "Credit score must be at least 650 to be eligible for any credit limit increase."
-
+    on_violation: BLOCKED
+    description: "A credit score below min_credit_score blocks any credit limit increase."
   - name: hard_delinquency_cutoff
-    condition: "delinquencies_90d > 0"
-    action: BLOCKED
-    description: "Any 90-day or greater delinquency in credit history immediately blocks credit increases."
-
+    on_violation: BLOCKED
+    description: "Any 90-day or greater delinquency in credit history blocks credit increases."
   - name: dti_ceiling
-    condition: "dti_ratio > 0.43"
-    action: BLOCKED
-    description: "Debt-to-income (DTI) ratio exceeding 43% blocks limit expansion."
-
+    on_violation: BLOCKED
+    description: "A debt-to-income ratio above max_dti_ratio blocks limit expansion."
   - name: high_limit_increase_approval
-    condition: "increase_amount > 5000"
-    action: REQUIRES_APPROVAL
-    description: "Credit limit increase requests exceeding $5,000 require senior underwriter authorization."
+    on_violation: REQUIRES_APPROVAL
+    description: "Increases above max_autonomous_increase dollars require senior underwriter authorization."

@@ -10,7 +10,43 @@ the same protocol.
 import pytest
 from mcp.client import Client
 
+import domains.credit_risk.server as credit_risk_server
+import domains.enterprise_operations.server as operations_server
+import domains.multimodal_investigation.server as multimodal_server
+import domains.product_analytics.server as analytics_server
+from agent_runtime.agent.tools.mcp_tool import _category_from_meta
 from agent_runtime.mcp_layer.servers import records_server
+
+
+@pytest.mark.parametrize(
+    ("module", "expected"),
+    [
+        (analytics_server, {"execute_sql": "sql", "describe_tables": "record", "test_significance": "statistics"}),
+        (credit_risk_server, {"execute_sql": "sql", "describe_tables": "record", "get_account_profile": "record"}),
+        (
+            multimodal_server,
+            {"extract_document_metrics": "vision", "analyze_chart_data": "vision", "list_visual_artifacts": "record"},
+        ),
+        (
+            operations_server,
+            {
+                "get_incident_telemetry": "record",
+                "list_service_incidents": "record",
+                "inspect_service_config": "record",
+                "simulate_remediation_action": "statistics",
+            },
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_domain_tool_categories_survive_discovery(module, expected):
+    # Budgets and evidence provenance depend on these declarations reaching
+    # the client through the protocol; tests/fakes.py FunctionTool relies on
+    # them matching too.
+    async with Client(module.server) as client:
+        listing = await client.list_tools()
+        discovered = {tool.name: _category_from_meta(tool.meta).value for tool in listing.tools}
+    assert discovered == expected
 
 
 @pytest.mark.asyncio

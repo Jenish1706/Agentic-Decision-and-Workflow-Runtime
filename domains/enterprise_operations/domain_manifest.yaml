@@ -1,30 +1,35 @@
+# Domain manifest, read by agent_runtime/domains.py.
+#
+# `thresholds` are the numbers policies.py enforces; the loader rejects a
+# manifest with a missing or unknown threshold. `policy_rules` documents each
+# rule, and the loader checks these names against the rules the code registers,
+# so this file cannot silently drift from what actually runs.
 name: enterprise_operations
 title: "Enterprise Systems Operations & Incident Response"
-description: "Production telemetry, service configuration drift audit, incident root-cause diagnosis, and deterministic blast-radius remediation governance."
+description: "Production incident telemetry, service configuration audit, and blast-radius remediation governance."
 
-active_tools:
-  - ops.get_incident_telemetry
-  - ops.inspect_service_config
-  - ops.simulate_remediation_action
-  - local.calculator
+# Shown to the model with the decision rules: the action and parameter names
+# the rules understand, and the evidence they read. It never changes a verdict.
+decision_guide: |
+  Decisions here are production changes. Use the change being evaluated as recommended_action
+  (for example "rolling_restart", "scale_workers", "apply_config_change", "deploy_service",
+  "failover_secondary_gateway") with parameters service_name (or incident_id) and, when known,
+  blast_radius_pct. The rules read, for that service: every incident recorded for it (call
+  list_service_incidents - a single incident lookup cannot rule out a production freeze), any
+  assessed blast radius, and for deployments or configuration changes its TLS version and debug
+  port (inspect_service_config).
+
+thresholds:
+  max_autonomous_blast_radius_pct: 25.0
+  min_tls_version: 1.3
 
 policy_rules:
-  - name: production_blast_radius_cap
-    condition: "blast_radius_pct > 25.0"
-    action: REQUIRES_APPROVAL
-    description: "Automated remediation affecting greater than 25% of service capacity requires human operator approval."
-
   - name: active_p0_incident_freeze
-    condition: "severity == 'P0' and override_authorized != true"
-    action: BLOCKED
-    description: "Routine configuration mutations are frozen during active P0 production incidents."
-
+    on_violation: BLOCKED
+    description: "Changes to a service with an active P0 incident are frozen unless an emergency override is authorized. 'No active P0' must come from a complete incident listing for the service."
+  - name: production_blast_radius_cap
+    on_violation: REQUIRES_APPROVAL
+    description: "Remediation affecting more than max_autonomous_blast_radius_pct percent of a service's capacity requires incident commander approval, unless an authorized emergency override covers it."
   - name: security_baseline_compliance
-    condition: "tls_version < 1.3 or debug_port_open == true"
-    action: BLOCKED
-    description: "Service deployments violating enterprise security baseline (TLS < 1.3 or exposed debug ports) are strictly blocked."
-
-  - name: safe_automated_restart
-    condition: "blast_radius_pct <= 10.0 and severity in ['P2', 'P3']"
-    action: ALLOWED
-    description: "Low-impact rolling restarts within 10% capacity for non-critical services can execute autonomously."
+    on_violation: BLOCKED
+    description: "Deployments and configuration changes to a service running TLS below min_tls_version or exposing a debug port are blocked."

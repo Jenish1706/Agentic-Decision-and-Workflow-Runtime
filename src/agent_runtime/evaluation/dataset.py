@@ -1,6 +1,13 @@
-"""Loads the hand-authored evaluation benchmark (data/benchmark.json).
-See docs/SPEC.md section 22 for how it was constructed and why it's
-small (~20 queries) and hand-verified rather than large and synthetic."""
+"""Loads hand-authored evaluation benchmarks: data/benchmark.json for the
+knowledge base and domains/<name>/benchmark.json for each business domain.
+
+The benchmarks are small (a few dozen questions) and hand-verified against
+the data rather than large and synthetic: every expected answer and expected
+number can be checked by reading the corpus or querying the database, which
+matters more here than statistical power. The optional fields are used only
+where they apply - `expected_doc_ids` for retrieval scoring,
+`expected_numbers` for expected-number recall, `expected_policy_status` for
+policy alignment."""
 
 import json
 from pathlib import Path

@@ -15,8 +15,8 @@
     "difficulty": "medium",
     "expected_tool": "get_incident_telemetry",
     "expected_policy_status": "allowed",
-    "expected_numbers": [10.0, 52000],
-    "expected_answer": "Approve automated remediation: INC-903 is a P2 incident with a 10.0% blast radius, which is within the autonomous operational threshold (<= 10.0%)."
+    "expected_numbers": [10.0, 25.0],
+    "expected_answer": "Approve automated remediation: recommendation-worker has no active P0 incident (INC-903 is P2), and the 10.0% blast radius is within the 25.0% autonomous blast-radius limit."
   },
   {
     "id": "ops-03",
@@ -39,7 +39,7 @@
   },
   {
     "id": "ops-05",
-    "question": "Audit legacy-billing deployment configuration against enterprise security baselines.",
+    "question": "Can legacy-billing's current configuration be deployed under enterprise security baselines?",
     "category": "policy_violation",
     "difficulty": "medium",
     "expected_tool": "inspect_service_config",

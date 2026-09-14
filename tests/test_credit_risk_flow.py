@@ -1,12 +1,11 @@
-"""End-to-end integration and policy tests for Credit Risk & Underwriting Domain.
+"""Credit-risk domain through the real agent loop.
 
-Verifies:
-1. Autonomous limit approval when all underwriting criteria (score >= 650, DTI <= 43%, no delinquencies, increase <= $5k) pass.
-2. Deterministic BLOCKED outcome when DTI exceeds 43% ceiling.
-3. Deterministic BLOCKED outcome when 90-day delinquency or sub-650 credit score is detected.
-4. Deterministic REQUIRES_APPROVAL escalation when increase exceeds $5,000.
-5. Numerical verification blocking hallucinated financial scores.
-6. SQL security controls blocking DDL operations (DROP, ALTER).
+Real server functions (domains/credit_risk/server.py) feed real domain
+policies (domains/credit_risk/policies.py, thresholds from the manifest);
+only the LLM is scripted. Besides the four headline outcomes, the
+regression tests pin down governance bypasses that existed before facts were
+resolved from evidence: self-reported facts, another account's facts, missing
+facts, and unrecognised action names.
 """
 
 import pytest
@@ -15,287 +14,259 @@ from agent_runtime.agent.actions import ActionDecision, ActionType
 from agent_runtime.agent.loop import AgentRuntime
 from agent_runtime.agent.policy import PolicyStatus, ProposedDecision
 from agent_runtime.agent.state import TerminationReason
-from agent_runtime.agent.tools.base import Tool, ToolResult
+from agent_runtime.agent.tools.base import ToolCategory
 from agent_runtime.agent.tools.registry import ToolRegistry
-from agent_runtime.mcp_layer.servers.credit_risk_server import (
-    describe_tables,
-    execute_sql,
-    get_account_profile,
-)
-from domains.credit_risk.policies import create_credit_risk_policy_engine
+from agent_runtime.domains import load_domain
+from domains.credit_risk.server import describe_tables, execute_sql, get_account_profile
+
+from .fakes import FakeLLMClient, FunctionTool
 
 
-class _LocalCreditSqlTool(Tool):
-    name = "execute_sql"
-    description = "Execute read-only SQL query on credit risk database."
-    parameters_schema = {
-        "type": "object",
-        "properties": {"query": {"type": "string"}},
-        "required": ["query"],
-    }
-    origin = "local"
-
-    async def run(self, query: str) -> ToolResult:
-        res = execute_sql(query)
-        if not res.ok:
-            return ToolResult(ok=False, content="", error=res.error)
-        return ToolResult(
-            ok=True,
-            content=f"Returned {res.row_count} rows: {res.rows}",
-            data={"columns": res.columns, "row_count": res.row_count, "rows": res.rows},
-        )
-
-
-class _LocalProfileTool(Tool):
-    name = "get_account_profile"
-    description = "Fetch unified account dossier."
-    parameters_schema = {
-        "type": "object",
-        "properties": {"account_id": {"type": "string"}},
-        "required": ["account_id"],
-    }
-    origin = "local"
-
-    async def run(self, account_id: str) -> ToolResult:
-        res = get_account_profile(account_id)
-        if not res.ok:
-            return ToolResult(ok=False, content="", error=res.error)
-        return ToolResult(
-            ok=True,
-            content=f"Account profile for {res.account_id}: info={res.account_info}, history={res.credit_history}",
-            data={
-                "account_id": res.account_id,
-                "account_info": res.account_info,
-                "credit_history": res.credit_history,
-                "open_requests": res.open_requests,
-                "inquiries": res.inquiries,
-            },
-        )
-
-
-class FakeLLM:
-    def __init__(self, decisions: list[ActionDecision]):
-        self._decisions = list(decisions)
-        self.call_count = 0
-
-    async def decide(self, messages, response_model, max_retries=2):
-        if not self._decisions:
-            raise RuntimeError("FakeLLM ran out of decisions")
-        d = self._decisions.pop(0)
-        self.call_count += 1
-        return d
-
-
-@pytest.mark.asyncio
-async def test_credit_risk_autonomous_approval_flow():
-    """ACCT-101 meets all guidelines; proposal to approve $3,000 increase is ALLOWED."""
+def _runtime(decisions: list[ActionDecision]) -> AgentRuntime:
     tools = ToolRegistry()
-    tools.register(_LocalCreditSqlTool())
-    tools.register(_LocalProfileTool())
-
-    policy_engine = create_credit_risk_policy_engine()
-
-    decisions = [
-        # Step 0: inspect account profile
-        ActionDecision(
-            thought="Fetch full profile for ACCT-101",
-            action=ActionType.CALL_TOOL,
-            tool_name="get_account_profile",
-            tool_arguments={"account_id": "ACCT-101"},
-        ),
-        # Step 1: recommend approval
-        ActionDecision(
-            thought="Alice Walker has 740 credit score, 28% DTI, 0 delinquencies, and $3000 increase is <= $5000.",
-            action=ActionType.FINAL,
-            answer="Approve credit limit increase from $5,000 to $8,000 for ACCT-101. Credit score is 740, DTI is 28.0%, with zero delinquencies.",
-            proposed_decision=ProposedDecision(
-                intent="Approve credit limit increase",
-                recommended_action="approve_increase",
-                parameters={"account_id": "ACCT-101", "increase_amount": 3000.0, "credit_score": 740, "dti_ratio": 0.28},
-                reasoning="Prime borrower with 740 FICO and 28% DTI.",
-                confidence=0.98,
-            ),
-        ),
-    ]
-
-    runtime = AgentRuntime(
-        llm=FakeLLM(decisions),
+    tools.register(FunctionTool(execute_sql, ToolCategory.SQL))
+    tools.register(FunctionTool(get_account_profile, ToolCategory.RECORD))
+    return AgentRuntime(
+        llm=FakeLLMClient(decisions),
         tools=tools,
-        policy_engine=policy_engine,
+        policy_engine=load_domain("credit_risk").create_policy_engine(),
         max_steps=5,
     )
 
-    state = await runtime.run("Should we approve credit limit increase for ACCT-101?")
 
-    assert state.done is True
+def _call(tool_name: str, **arguments) -> ActionDecision:
+    return ActionDecision(thought=f"Call {tool_name}", action=ActionType.CALL_TOOL, tool_name=tool_name, tool_arguments=arguments)
+
+
+def _decide(answer: str, action: str, **parameters) -> ActionDecision:
+    return ActionDecision(
+        thought="Propose the decision",
+        action=ActionType.FINAL,
+        answer=answer,
+        proposed_decision=ProposedDecision(
+            intent="Credit limit increase decision",
+            recommended_action=action,
+            parameters=parameters,
+            reasoning="Based on the gathered evidence.",
+            confidence=0.9,
+        ),
+    )
+
+
+def _statuses(state) -> dict[str, PolicyStatus]:
+    return {result.rule_name: result.effective_status for result in state.policy_evaluation.rule_results}
+
+
+@pytest.mark.asyncio
+async def test_prime_borrower_is_approved_autonomously():
+    runtime = _runtime([
+        _call("get_account_profile", account_id="ACCT-101"),
+        _decide(
+            "Approve the increase from $5,000 to $8,000 for ACCT-101: credit score 740, DTI 28.0%, no delinquencies.",
+            "approve_increase",
+            account_id="ACCT-101",
+            increase_amount=3000,
+        ),
+    ])
+    state = await runtime.run("Should we approve ACCT-101's requested $3,000 increase?")
+
     assert state.termination_reason == TerminationReason.FINAL_ANSWER
-    assert state.policy_evaluation is not None
+    assert state.answer_verified is True
     assert state.policy_evaluation.final_status == PolicyStatus.ALLOWED
-    assert state.policy_evaluation.requires_approval is False
 
 
 @pytest.mark.asyncio
-async def test_credit_risk_dti_ceiling_blocks_approval():
-    """ACCT-104 has 48% DTI (>43% ceiling); an approval attempt is BLOCKED by policy."""
-    tools = ToolRegistry()
-    tools.register(_LocalCreditSqlTool())
-
-    policy_engine = create_credit_risk_policy_engine()
-
-    decisions = [
-        # Step 0: query account
-        ActionDecision(
-            thought="Check DTI and limit request for ACCT-104",
-            action=ActionType.CALL_TOOL,
-            tool_name="execute_sql",
-            tool_arguments={
-                "query": "SELECT a.account_id, a.credit_score, a.current_limit, a.dti_ratio, r.requested_limit, r.increase_amount FROM accounts a JOIN limit_requests r ON a.account_id = r.account_id WHERE a.account_id = 'ACCT-104'"
-            },
-        ),
-        # Step 1: attempt to approve despite 48% DTI
-        ActionDecision(
-            thought="Attempt to approve despite high debt-to-income",
-            action=ActionType.FINAL,
-            answer="Recommend limit increase to $6,000 despite 48.0% DTI.",
-            proposed_decision=ProposedDecision(
-                intent="Approve limit expansion",
-                recommended_action="approve_increase",
-                parameters={"account_id": "ACCT-104", "increase_amount": 2000.0, "dti_ratio": 0.48, "credit_score": 670},
-                reasoning="Good credit score 670.",
-                confidence=0.75,
+async def test_dti_above_ceiling_blocks_approval():
+    runtime = _runtime([
+        _call(
+            "execute_sql",
+            query=(
+                "SELECT a.account_id, a.credit_score, a.dti_ratio, r.increase_amount FROM accounts a "
+                "JOIN limit_requests r ON a.account_id = r.account_id WHERE a.account_id = 'ACCT-104'"
             ),
         ),
-    ]
+        _decide("ACCT-104 has a DTI of 48.0%.", "approve_increase", account_id="ACCT-104", increase_amount=2000),
+    ])
+    state = await runtime.run("Can ACCT-104 be granted the increase?")
 
-    runtime = AgentRuntime(
-        llm=FakeLLM(decisions),
-        tools=tools,
-        policy_engine=policy_engine,
-        max_steps=5,
-    )
-
-    state = await runtime.run("Can Diana Prince (ACCT-104) be granted her credit increase?")
-
-    assert state.done is True
-    assert state.policy_evaluation is not None
     assert state.policy_evaluation.final_status == PolicyStatus.BLOCKED
     assert "exceeds maximum allowable 43.0% ceiling" in state.policy_evaluation.audit_notes
 
 
 @pytest.mark.asyncio
-async def test_credit_risk_delinquency_and_low_score_blocked():
-    """ACCT-102 has credit score 610 (<650) and 1 90-day delinquency; both trigger BLOCKED."""
-    tools = ToolRegistry()
-    tools.register(_LocalCreditSqlTool())
-
-    policy_engine = create_credit_risk_policy_engine()
-
-    decisions = [
-        # Step 0: query account and history
-        ActionDecision(
-            thought="Query score and delinquency",
-            action=ActionType.CALL_TOOL,
-            tool_name="execute_sql",
-            tool_arguments={
-                "query": "SELECT a.credit_score, h.delinquencies_90d FROM accounts a JOIN credit_history h ON a.account_id = h.account_id WHERE a.account_id = 'ACCT-102'"
-            },
-        ),
-        # Step 1: propose decision
-        ActionDecision(
-            thought="Propose approval to test policy block",
-            action=ActionType.FINAL,
-            answer="Recommend limit increase for ACCT-102 with credit score 610.",
-            proposed_decision=ProposedDecision(
-                intent="Approve limit increase",
-                recommended_action="approve_increase",
-                parameters={"account_id": "ACCT-102", "credit_score": 610, "delinquencies_90d": 1},
-                reasoning="Long-term customer.",
-                confidence=0.6,
+async def test_violations_block_even_when_rows_lack_account_id():
+    # The query forgot to SELECT account_id, so the values cannot be
+    # attributed to ACCT-102. Violating values still block; see the next test
+    # for why passing values would not approve.
+    runtime = _runtime([
+        _call(
+            "execute_sql",
+            query=(
+                "SELECT a.credit_score, h.delinquencies_90d FROM accounts a JOIN credit_history h "
+                "ON a.account_id = h.account_id WHERE a.account_id = 'ACCT-102'"
             ),
         ),
-    ]
+        _decide("ACCT-102 has a credit score of 610.", "approve_increase", account_id="ACCT-102", increase_amount=2000),
+    ])
+    state = await runtime.run("Evaluate ACCT-102 for a credit limit increase.")
 
-    runtime = AgentRuntime(
-        llm=FakeLLM(decisions),
-        tools=tools,
-        policy_engine=policy_engine,
-        max_steps=5,
-    )
-
-    state = await runtime.run("Evaluate Bob Martinez (ACCT-102) for credit limit increase.")
-
-    assert state.done is True
-    assert state.policy_evaluation is not None
+    statuses = _statuses(state)
     assert state.policy_evaluation.final_status == PolicyStatus.BLOCKED
-    blocked_rules = [r.rule_name for r in state.policy_evaluation.rule_results if r.status == PolicyStatus.BLOCKED]
-    assert "minimum_credit_score" in blocked_rules
-    assert "hard_delinquency_cutoff" in blocked_rules
+    assert statuses["minimum_credit_score"] == PolicyStatus.BLOCKED
+    assert statuses["hard_delinquency_cutoff"] == PolicyStatus.BLOCKED
 
 
 @pytest.mark.asyncio
-async def test_credit_risk_high_increase_requires_approval():
-    """ACCT-103 requests $10,000 increase (> $5,000 threshold); triggers REQUIRES_APPROVAL."""
-    tools = ToolRegistry()
-    tools.register(_LocalCreditSqlTool())
+async def test_unattributed_passing_values_cannot_approve():
+    runtime = _runtime([
+        _call("execute_sql", query="SELECT credit_score, dti_ratio FROM accounts WHERE account_id = 'ACCT-101'"),
+        _decide("The credit score is 740.", "approve_increase", account_id="ACCT-101", increase_amount=3000),
+    ])
+    state = await runtime.run("Approve ACCT-101?")
 
-    policy_engine = create_credit_risk_policy_engine()
+    statuses = _statuses(state)
+    assert statuses["minimum_credit_score"] == PolicyStatus.REQUIRES_APPROVAL
+    assert "could not be attributed" in state.policy_evaluation.audit_notes
 
-    decisions = [
-        # Step 0: query account
-        ActionDecision(
-            thought="Query ACCT-103 details and limit request",
-            action=ActionType.CALL_TOOL,
-            tool_name="execute_sql",
-            tool_arguments={
-                "query": "SELECT a.account_id, a.credit_score, a.current_limit, a.dti_ratio, r.requested_limit, r.increase_amount FROM accounts a JOIN limit_requests r ON a.account_id = r.account_id WHERE a.account_id = 'ACCT-103'"
-            },
+
+@pytest.mark.asyncio
+async def test_large_increase_requires_senior_approval():
+    runtime = _runtime([
+        _call("get_account_profile", account_id="ACCT-103"),
+        _decide(
+            "ACCT-103 requests an increase of $10,000; score 710 and DTI 32.0% are within policy.",
+            "approve_increase",
+            account_id="ACCT-103",
+            increase_amount=10000,
         ),
-        # Step 1: propose approval with $10,000 increase
-        ActionDecision(
-            thought="Propose $10,000 increase",
-            action=ActionType.FINAL,
-            answer="Recommend expanding line from $10,000 to $20,000 (increase of $10,000).",
-            proposed_decision=ProposedDecision(
-                intent="Approve high-value credit line expansion",
-                recommended_action="approve_increase",
-                parameters={"account_id": "ACCT-103", "increase_amount": 10000.0, "credit_score": 710, "dti_ratio": 0.32},
-                reasoning="Strong financial standing, 710 score, 32% DTI.",
-                confidence=0.9,
-            ),
-        ),
-    ]
+    ])
+    state = await runtime.run("Evaluate ACCT-103's request to go from $10,000 to $20,000.")
 
-    runtime = AgentRuntime(
-        llm=FakeLLM(decisions),
-        tools=tools,
-        policy_engine=policy_engine,
-        max_steps=5,
-    )
-
-    state = await runtime.run("Evaluate Charlie Davis (ACCT-103) request to increase line from $10,000 to $20,000.")
-
-    assert state.done is True
-    assert state.policy_evaluation is not None
+    statuses = _statuses(state)
     assert state.policy_evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
-    assert state.policy_evaluation.requires_approval is True
+    assert statuses["high_limit_increase_approval"] == PolicyStatus.REQUIRES_APPROVAL
+    # Every other rule passed on complete evidence: the amount alone escalates.
+    assert {name for name, status in statuses.items() if status != PolicyStatus.ALLOWED} == {"high_limit_increase_approval"}
     assert "exceeds autonomous threshold ($5,000)" in state.policy_evaluation.audit_notes
 
 
-def test_credit_risk_ddl_prevention():
-    """Destructive DDL is blocked at tool level."""
-    res = execute_sql("DROP TABLE accounts;")
-    assert res.ok is False
-    assert "Disallowed operations detected" in res.error
-
-    res2 = execute_sql("ALTER TABLE accounts ADD COLUMN bad_col INT;")
-    assert res2.ok is False
-    assert "Disallowed operations detected" in res2.error
+# ---------------------------------------------------------------- regressions
 
 
-def test_credit_risk_describe_tables():
-    """Schema discovery returns all 4 tables."""
-    res = describe_tables()
-    assert "accounts" in res.tables
-    assert "credit_history" in res.tables
-    assert "limit_requests" in res.tables
-    assert "bureau_inquiries" in res.tables
+@pytest.mark.asyncio
+async def test_proposal_cannot_supply_its_own_facts():
+    # Before: the rules read credit_score / delinquencies_90d from the
+    # proposal first, so these invented parameters approved ACCT-102.
+    runtime = _runtime([
+        _call("get_account_profile", account_id="ACCT-102"),
+        _decide(
+            "Approve ACCT-102.",
+            "approve_increase",
+            account_id="ACCT-102",
+            increase_amount=2000,
+            credit_score=800,
+            delinquencies_90d=0,
+            dti_ratio=0.1,
+        ),
+    ])
+    state = await runtime.run("Approve ACCT-102?")
+
+    statuses = _statuses(state)
+    assert statuses["minimum_credit_score"] == PolicyStatus.BLOCKED
+    assert statuses["hard_delinquency_cutoff"] == PolicyStatus.BLOCKED
+
+
+@pytest.mark.asyncio
+async def test_facts_about_other_accounts_are_ignored():
+    # Before: "the first credit_score in the ledger" was used - here that is
+    # ACCT-101's 740 - whichever account the proposal was about.
+    runtime = _runtime([
+        _call("execute_sql", query="SELECT account_id, credit_score, dti_ratio FROM accounts ORDER BY account_id"),
+        _decide("ACCT-104 has a DTI of 48.0%.", "approve_increase", account_id="ACCT-104", increase_amount=2000),
+    ])
+    state = await runtime.run("Approve ACCT-104?")
+
+    statuses = _statuses(state)
+    assert statuses["dti_ceiling"] == PolicyStatus.BLOCKED
+    # The ledger also holds ACCT-102's failing 610; only ACCT-104's own 670 counts.
+    assert statuses["minimum_credit_score"] == PolicyStatus.ALLOWED
+    assert "Credit score 670 meets" in state.policy_evaluation.audit_notes
+
+
+@pytest.mark.asyncio
+async def test_approval_without_any_evidence_is_not_allowed():
+    # Before: every lookup returned None, None meant "no violation", and the
+    # approval was ALLOWED without the agent having looked at anything.
+    runtime = _runtime([_decide("Approve the increase for ACCT-102.", "approve_increase", account_id="ACCT-102")])
+    state = await runtime.run("Approve ACCT-102?")
+
+    assert state.policy_evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert PolicyStatus.ALLOWED not in _statuses(state).values()
+
+
+@pytest.mark.asyncio
+async def test_unrecognised_approval_spelling_is_still_governed():
+    # Before: only four exact action strings were checked; anything else skipped every rule.
+    runtime = _runtime([
+        _call("get_account_profile", account_id="ACCT-102"),
+        _decide("Raise the limit for ACCT-102.", "grant_limit_raise", account_id="ACCT-102", increase_amount=2000),
+    ])
+    state = await runtime.run("Raise ACCT-102's limit?")
+
+    assert state.policy_evaluation.final_status == PolicyStatus.BLOCKED
+
+
+@pytest.mark.asyncio
+async def test_understated_increase_uses_the_requested_amount():
+    runtime = _runtime([
+        _call("get_account_profile", account_id="ACCT-103"),
+        _decide("Approve a small increase for ACCT-103.", "approve_increase", account_id="ACCT-103", increase_amount=1000),
+    ])
+    state = await runtime.run("Approve ACCT-103?")
+
+    assert _statuses(state)["high_limit_increase_approval"] == PolicyStatus.REQUIRES_APPROVAL
+
+
+@pytest.mark.asyncio
+async def test_thin_file_borrower_with_no_score_requires_approval():
+    runtime = _runtime([
+        _call("get_account_profile", account_id="ACCT-105"),
+        _decide("ACCT-105 has no credit score on file.", "approve_increase", account_id="ACCT-105", increase_amount=2000),
+    ])
+    state = await runtime.run("Does ACCT-105 qualify?")
+
+    assert _statuses(state)["minimum_credit_score"] == PolicyStatus.REQUIRES_APPROVAL
+
+
+@pytest.mark.asyncio
+async def test_non_granting_action_is_not_governed():
+    runtime = _runtime([_decide("Refer ACCT-102 to an underwriter.", "refer_to_underwriter", account_id="ACCT-102")])
+    state = await runtime.run("What should happen with ACCT-102?")
+
+    assert state.policy_evaluation.final_status == PolicyStatus.ALLOWED
+
+
+# ---------------------------------------------------------------- server
+
+
+def test_account_profile_attributes_every_nested_record():
+    profile = get_account_profile("acct-101 ")
+    assert profile.ok and profile.account_id == "ACCT-101"
+    assert profile.credit_history["account_id"] == "ACCT-101"
+    assert profile.open_requests[0]["request_date"] == "2024-11-10"  # dates are JSON-safe
+
+
+def test_unknown_account_is_reported_not_raised():
+    profile = get_account_profile("ACCT-999")
+    assert not profile.ok and "not found" in profile.error
+
+
+def test_ddl_is_rejected():
+    for statement in ("DROP TABLE accounts;", "ALTER TABLE accounts ADD COLUMN bad INT"):
+        result = execute_sql(statement)
+        assert not result.ok
+        assert "Disallowed operations detected" in result.error
+
+
+def test_describe_tables_lists_all_tables():
+    assert set(describe_tables().tables) == {"accounts", "credit_history", "limit_requests", "bureau_inquiries"}

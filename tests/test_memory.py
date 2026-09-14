@@ -1,3 +1,5 @@
+import zlib
+
 import numpy as np
 import pytest
 
@@ -9,16 +11,20 @@ from .fakes import FakeLLMClient
 
 class _FakeEmbedder:
     """Deterministic bag-of-words embedder - just different enough for
-    distinct texts to rank sensibly, without loading a real model."""
+    distinct texts to rank sensibly, without loading a real model.
 
-    dim = 16
+    Buckets come from crc32, not `hash()`: Python randomizes string hashes
+    per process, so hash-based buckets made similarity scores (and any test
+    that depends on a score threshold) change from run to run."""
+
+    dim = 64
 
     def embed(self, texts: list[str]) -> np.ndarray:
         vectors = []
         for text in texts:
             vec = np.zeros(self.dim, dtype=np.float32)
             for word in text.lower().split():
-                vec[hash(word) % self.dim] += 1.0
+                vec[zlib.crc32(word.encode()) % self.dim] += 1.0
             norm = np.linalg.norm(vec)
             vectors.append(vec / norm if norm > 0 else vec)
         return np.array(vectors, dtype=np.float32)
@@ -41,6 +47,25 @@ def test_short_term_memory_clear():
     assert memory.recent_turns() == []
 
 
+def test_short_term_memory_does_not_grow_without_bound():
+    # Regression: turns were appended to a list forever and only the tail was read.
+    memory = ShortTermMemory(max_turns=3)
+    for index in range(1000):
+        memory.record(f"q{index}", "a")
+    assert len(memory._turns) == 3
+
+
+@pytest.mark.asyncio
+async def test_long_term_memory_ignores_unrelated_memories(tmp_path):
+    # Regression: retrieve() returned the top-k memories however unrelated,
+    # so every stored memory was injected into every prompt.
+    llm = FakeLLMClient(decisions=[_MemoryWriteDecision(worth_remembering=True, fact="alpha beta gamma delta")])
+    memory = LongTermMemory(embedder=_FakeEmbedder(), path=tmp_path / "memory.json", min_score=0.5)
+    await memory.maybe_store(llm, "q", "a")
+    assert memory.retrieve("alpha beta gamma delta")
+    assert memory.retrieve("completely different words here") == []
+
+
 @pytest.mark.asyncio
 async def test_long_term_memory_skips_writes_when_not_worth_remembering(tmp_path):
     llm = FakeLLMClient(decisions=[_MemoryWriteDecision(worth_remembering=False, fact=None)])
@@ -61,7 +86,7 @@ async def test_long_term_memory_stores_and_retrieves_durable_facts(tmp_path):
     assert item is not None
     assert path.exists()
 
-    hits = memory.retrieve("concise answers preference")
+    hits = memory.retrieve("the user prefers concise answers")
     assert any("concise" in hit.text for hit in hits)
 
 

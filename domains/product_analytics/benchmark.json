@@ -59,8 +59,8 @@
     "category": "statistical_significance",
     "difficulty": "medium",
     "expected_tool": "test_significance",
-    "expected_numbers": [0.05, 0.015, 1.3],
-    "expected_answer": "Yes, Variant B is statistically significant with p < 0.05 (p-value ~0.015), representing an absolute lift of 1.33 percentage points."
+    "expected_numbers": [0.05, 0.014, 1.3],
+    "expected_answer": "Yes, Variant B is statistically significant with p < 0.05 (p-value ~0.014), representing an absolute lift of 1.33 percentage points."
   },
   {
     "id": "pa-08",
@@ -93,7 +93,7 @@
     "category": "insufficient_evidence",
     "difficulty": "medium",
     "expected_tool": "execute_sql",
-    "expected_answer": "The database contains device telemetry by device category (mobile, desktop, tablet) but does not record operating system (iOS vs Android); therefore, this breakdown cannot be determined from available data."
+    "expected_answer": "The database records device category (mobile vs desktop) but not operating system (iOS vs Android); therefore, this breakdown cannot be determined from available data."
   },
   {
     "id": "pa-12",

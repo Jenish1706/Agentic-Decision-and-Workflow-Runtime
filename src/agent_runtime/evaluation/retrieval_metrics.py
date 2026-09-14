@@ -10,10 +10,12 @@ agent reached correct answers while making 1.60 unnecessary tool calls per
 query on average, and on three questions exhausted its step budget
 mid-search and returned nothing at all.
 
-Naming note: these measure efficiency against budgets that are mostly
-*implicit* (top-k per call, max_steps per run). The only explicit retrieval
-budget in the codebase is `AgentRuntime(max_retrievals=...)`, added for the
-budget experiment - see scripts/run_budget_experiment.py.
+Naming note: these measure efficiency whether or not a budget applied. Two
+explicit caps exist: `AgentRuntime(max_retrievals=...)`, the plain cap used
+by the retrieval-budget experiment (scripts/run_budget_experiment.py), and
+`ActionBudget.max_retrievals` (agent/budget.py), used by the adaptive
+budgeting experiment. Without either, retrieval is bounded only by top-k per
+call and max_steps per run.
 """
 
 from dataclasses import dataclass

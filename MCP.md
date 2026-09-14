@@ -14,55 +14,115 @@ invocation (call one, get a structured result back), and transport
 one protocol instead of a bespoke integration per tool source.
 
 This project uses the [official Python SDK](https://github.com/modelcontextprotocol/python-sdk)
-(package `mcp`, v2 - the current rework for the 2026-07-28 spec). It does
-not reimplement the wire protocol; that would teach nothing. What it builds
-is everything around the protocol: two real servers, a client wrapper, and
-the adapter that lets an MCP tool sit in the same registry as a local one.
+(package `mcp`, v2). It does not reimplement the wire protocol; that would
+teach nothing. What it builds is everything around the protocol: six real
+servers, a client wrapper, and the adapter that lets an MCP tool sit in the
+same registry as a local one.
 
 ## What's actually running
 
-Two servers, each a genuinely separate OS process:
+Every server is a genuinely separate OS process, built with `MCPServer` (the
+SDK's decorator-based server class - `@server.tool()`, `@server.resource(uri)`),
+which derives each tool's JSON Schema from Python type hints.
 
-- **`knowledge` server** ([mcp_layer/servers/knowledge_server.py](src/agent_runtime/mcp_layer/servers/knowledge_server.py)) -
-  exposes `search_documents(query, top_k)` (runs the RAG pipeline - embed,
-  brute-force cosine search, cross-encoder rerank) and a `documents://list`
-  **resource** (a distinct MCP primitive from a tool: read-only, no
-  arguments, meant to be listed/fetched rather than "called").
-- **`records` server** ([mcp_layer/servers/records_server.py](src/agent_runtime/mcp_layer/servers/records_server.py)) -
-  exposes `lookup_record(record_id)` and `search_records(field, value)` over
-  a small JSON store (`data/records.json`) of Nimbus services and teams.
-  No embeddings involved - exact field matching, a deliberately different
-  tool shape from semantic search.
+**Knowledge base** (connected by default, `src/agent_runtime/mcp_layer/servers/`):
 
-Both are built with `MCPServer` (the SDK's ergonomic, decorator-based
-server class - `@server.tool()`, `@server.resource(uri)`), which derives
-the JSON Schema for each tool's parameters from Python type hints
-automatically. Neither server is a mock or a stub: `search_documents`
-really does build an embedding index and call a cross-encoder;
-`lookup_record` really does load and query the JSON file.
+- **`knowledge`** ([knowledge_server.py](src/agent_runtime/mcp_layer/servers/knowledge_server.py)) -
+  `search_documents(query, top_k)` runs the RAG pipeline (embed, brute-force
+  cosine search, cross-encoder rerank), plus a `documents://list` **resource**
+  (a distinct MCP primitive from a tool: read-only, no arguments, listed and
+  fetched rather than "called").
+- **`records`** ([records_server.py](src/agent_runtime/mcp_layer/servers/records_server.py)) -
+  `lookup_record(record_id)` and `search_records(field, value)` over a small
+  JSON store (`data/records.json`). Exact field matching - a deliberately
+  different tool shape from semantic search.
+
+**Business domains** (opt-in, one server per folder under `domains/`):
+
+| Server | Tools |
+|---|---|
+| [product_analytics](domains/product_analytics/server.py) | `execute_sql`, `describe_tables`, `test_significance` |
+| [credit_risk](domains/credit_risk/server.py) | `execute_sql`, `describe_tables`, `get_account_profile` |
+| [multimodal_investigation](domains/multimodal_investigation/server.py) | `extract_document_metrics`, `analyze_chart_data`, `list_visual_artifacts` |
+| [enterprise_operations](domains/enterprise_operations/server.py) | `get_incident_telemetry`, `list_service_incidents`, `inspect_service_config`, `simulate_remediation_action` |
+
+Domain servers live with their data and policies rather than inside the
+generic runtime package; `agent_runtime.domains.load_domain(name).server_modules`
+hands their file paths to the client. The multimodal server's "vision"
+tools read pre-extracted JSON fixtures - no image model runs (see the
+server's docstring for why that is still a meaningful test of the runtime).
+
+None of the servers is a mock: `search_documents` really builds an embedding
+index and calls a cross-encoder; the SQL tools really query DuckDB.
 
 ## Client side: discovery and invocation
 
 [mcp_layer/client.py](src/agent_runtime/mcp_layer/client.py)'s `MCPToolClient`
 is the one place in the codebase that speaks the MCP client protocol. On
-`__aenter__` it launches each server as a subprocess (`StdioServerParameters(command=sys.executable, args=["-m", "<module>"])`)
-and connects over stdio; it stays open for the process's lifetime rather
-than reconnecting per call, so the model-loading cost inside `knowledge`
-is paid once per session, not once per query.
+`__aenter__` it launches each server as a subprocess over stdio - a dotted
+module name runs as `python -m <module>`, a `.py` path runs as a script,
+both with the repository root as working directory - and keeps the sessions
+open for the client's lifetime, so the model-loading cost inside `knowledge`
+is paid once per session, not once per query. If the third of three servers
+fails to start, the two already running are shut down before the error
+propagates, rather than leaked as orphan processes.
 
 ```python
-async with MCPToolClient() as client:
-    tools = await client.discover_tools()       # tool discovery
+async with MCPToolClient() as client:                     # knowledge + records
+    tools = await client.discover_tools()                 # names, descriptions, schemas, metadata
     result = await client.call_tool("records", "lookup_record", {"record_id": "ferry"})
+
+spec = load_domain("credit_risk")
+async with MCPToolClient(server_modules=spec.server_modules) as client:
+    ...
 ```
 
-`discover_tools()` calls `list_tools()` on every connected server and
-returns each tool's name, description, and JSON Schema - this is genuine
-runtime discovery: nothing in the agent's code hard-codes what tools exist
-or what arguments they take. `call_tool()` returns a `CallToolResult` with
-either `structured_content` (when the tool's return type gives the SDK
-enough to produce structured JSON, which is what this project's tools do)
-or plain text content blocks as a fallback.
+`discover_tools()` calls `list_tools()` on every connected server - genuine
+runtime discovery: nothing in the agent's code hard-codes what tools exist or
+what arguments they take. `call_tool()` returns a `CallToolResult` with
+`structured_content` (a tool's typed return value as JSON, which becomes the
+evidence payload verbatim) or plain text blocks as a fallback.
+
+## Tool categories travel in MCP metadata
+
+Budgets and evidence provenance need to know what *kind* of tool ran: a SQL
+query consumes the SQL budget and is recorded as `analytics_sql` evidence; a
+document extraction consumes the vision budget. The earlier version guessed
+this from the tool's *name* ("sql" in the name means SQL, "document" means
+vision), which misfiled tools in every direction and never enforced the
+vision budget at all.
+
+Each server now declares it:
+
+```python
+@server.tool(meta={"category": "sql"})
+def execute_sql(query: str, max_rows: int = 50) -> SqlQueryResult: ...
+```
+
+`meta` is part of the MCP tool definition, so the category arrives with
+discovery; [agent/tools/mcp_tool.py](src/agent_runtime/agent/tools/mcp_tool.py)
+maps it onto `ToolCategory` (unknown values fall back to `record`), and local
+tools set the same attribute directly. `tests/test_mcp_servers.py` checks
+every domain server's declarations over the real protocol.
+
+## One safe SQL implementation, shared
+
+Both database-backed servers use
+[mcp_layer/duckdb_tools.py](src/agent_runtime/mcp_layer/duckdb_tools.py)
+instead of each carrying a copy (a hardening fix applied to one copy would
+silently miss the other). In order of strength:
+
+1. Connections are opened `read_only=True` with external access disabled, so
+   even a query that slipped past every check below cannot write, read local
+   files, or reach the network.
+2. One statement only - `SELECT 1; DROP TABLE x` is refused.
+3. A keyword blocklist applied *after* string literals and comments are
+   stripped (the old tokenizer rejected `WHERE purpose = 'call'`, because
+   `call` is a blocked keyword).
+4. The statement must start with a read-only verb.
+
+Results are capped server-side and carry `truncated`, so the model can tell a
+complete 50-row result from a cut-off one.
 
 ## The agent's `retrieve` action is itself MCP-mediated
 
@@ -97,6 +157,11 @@ is entirely inside `run()`:
 - `MCPTool.run()` calls `self._client.call_tool(server_name, self.name, kwargs)`
   - a message over stdio to a different OS process, with real
   (de)serialization and IPC latency (milliseconds, not microseconds).
+
+Tool names form one flat namespace, so the registry refuses a second tool
+with an existing name. It used to overwrite silently - and two domain
+servers both expose `execute_sql`, so connecting both would have sent every
+query to whichever registered last, against the wrong database.
 
 `scripts/demo_mcp.py` exercises the client directly with no agent
 involved, specifically so this protocol path is visible on its own rather

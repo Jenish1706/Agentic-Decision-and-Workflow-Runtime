@@ -21,7 +21,10 @@ DATA_DIR = REPO_ROOT / "data"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # Anchored to the repository root. A bare ".env" is resolved against the
+    # current working directory, so running a script from anywhere else
+    # silently ignored the file and fell back to defaults.
+    model_config = SettingsConfigDict(env_file=REPO_ROOT / ".env", env_file_encoding="utf-8", extra="ignore")
 
     # LLM backend (Ollama, local)
     ollama_host: str = "http://127.0.0.1:11434"

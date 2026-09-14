@@ -20,7 +20,7 @@
   },
   {
     "id": "mm-03",
-    "question": "Inspect scanned invoice INV-2026-002 from Metro Logistics for billing anomalies or fraud before payment.",
+    "question": "Inspect scanned invoice INV-2026-002 from Metro Logistics for billing anomalies: can it be approved for payment?",
     "category": "policy_violation",
     "difficulty": "medium",
     "expected_tool": "extract_document_metrics",

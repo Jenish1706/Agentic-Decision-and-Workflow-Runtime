@@ -12,9 +12,8 @@ call with extra steps": the only thing caller and server share is the MCP
 wire protocol over stdio.
 """
 
-from pydantic import BaseModel
-
 from mcp.server.mcpserver import MCPServer
+from pydantic import BaseModel
 
 from ...config import settings
 from ...rag.documents import load_documents

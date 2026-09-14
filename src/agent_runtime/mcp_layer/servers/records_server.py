@@ -7,9 +7,8 @@ source is prose worth chunking and embedding."""
 import json
 from typing import Any
 
-from pydantic import BaseModel
-
 from mcp.server.mcpserver import MCPServer
+from pydantic import BaseModel
 
 from ...config import settings
 

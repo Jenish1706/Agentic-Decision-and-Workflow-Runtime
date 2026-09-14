@@ -30,7 +30,14 @@ def print_single_agent_trace(state: AgentState) -> None:
         console.print(f"  observation: {_truncate(step.observation)}")
     console.rule("[bold green]Result[/bold green]")
     console.print(f"termination: {state.termination_reason}")
+    # Shown explicitly: an answer accepted on the last step without passing
+    # verification must not look the same as a verified one.
+    console.print(f"answer verified: {state.answer_verified}")
+    if state.verification_issues:
+        console.print(f"verification issues: {state.verification_issues}")
     console.print(f"citations: {state.citations}")
+    if state.policy_evaluation is not None:
+        console.print(f"policy: {state.policy_evaluation.final_status.value} - {state.policy_evaluation.audit_notes}")
     console.print(state.final_answer)
 
 

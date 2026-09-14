@@ -13,6 +13,25 @@ a durable, reusable fact (a stated preference or constraint) worth writing.
 That call is the answer to "when should something be stored" - it is not
 every message, and it is not a heuristic like "always store the last N
 turns" (that's just short_term.py with extra steps).
+
+Retrieval has a relevance floor (`min_score`). Without one, `retrieve`
+returned the top-k memories however unrelated they were - with only a
+couple of stored memories that meant ALL of them - and the loop injected
+them into every prompt as "remembered facts about this user". The floor is
+a cosine-similarity cut-off for the all-MiniLM-L6-v2 embeddings used here,
+chosen from a small spot check rather than tuned: against two stored
+memories, six unrelated questions scored 0.02-0.20, while two topical
+questions scored 0.48-0.50 and a paraphrased preference ("keep your answers
+short" vs "prefers concise answers") scored 0.27. Change it together with
+the embedding model.
+
+A known limit of similarity-retrieved memory: a general preference such as
+"prefers concise answers" applies to every question but is only retrieved
+by questions that resemble it.
+
+There is no notion of *which* user a memory belongs to: the store is one
+file for one local user. Anything multi-user (the FastAPI wrapper) must not
+enable it - see api.py.
 """
 
 import json
@@ -50,9 +69,10 @@ _JUDGE_SYSTEM_PROMPT = (
 
 
 class LongTermMemory:
-    def __init__(self, embedder: Embedder, path: Path):
+    def __init__(self, embedder: Embedder, path: Path, min_score: float = 0.25):
         self._embedder = embedder
         self._path = path
+        self._min_score = min_score
         self._index = VectorIndex(dim=embedder.dim)
         self._items: dict[str, MemoryItem] = {}
         self._load()
@@ -94,4 +114,4 @@ class LongTermMemory:
             return []
         query_vector = self._embedder.embed([query])[0]
         hits = self._index.search(query_vector, top_k)
-        return [self._items[hit.chunk_id] for hit in hits]
+        return [self._items[hit.chunk_id] for hit in hits if hit.score >= self._min_score]

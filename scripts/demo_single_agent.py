@@ -25,6 +25,9 @@ QUESTIONS = [
 async def main() -> None:
     async with build_single_agent_runtime() as runtime:
         for question in QUESTIONS:
+            # The questions are unrelated; without a reset each prompt would
+            # carry the previous questions and answers as "conversation".
+            runtime.reset_session()
             state = await runtime.run(question)
             print_single_agent_trace(state)
             print()

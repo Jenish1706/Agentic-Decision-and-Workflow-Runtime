@@ -1,263 +1,163 @@
-"""Cross-Domain Evaluation Suite for Agentic Decision & Workflow Runtime.
+"""Cross-domain evaluation: one runtime, four business domains.
 
-Demonstrates that the SAME core runtime architecture:
-  Evidence Gathering -> Bounded Analysis -> Numerical Verification -> Policy Governance -> Audit Trace
-solves heterogeneous business problems across 4 real-world enterprise domains:
-1. Product Analytics & Growth Experiments (SQL + SciPy + Rollout Policy)
-2. Credit Risk & Lending Underwriting (DuckDB + FICO/DTI Rules + Escalation)
-3. Multimodal Business Investigation (Scanned Invoices + Visual Charts + Fraud Audit)
-4. Enterprise Systems Operations (SRE Telemetry + Drift Detection + Blast Radius Governance)
+The same single-agent runtime (evidence ledger, numerical verification,
+policy engine, audit trace) answers every benchmark question of every domain
+under domains/. Each domain contributes only its MCP server and its policy
+engine, both loaded through agent_runtime.domains.
+
+Per domain it reports: answer verification rate, expected-number recall,
+policy alignment (for questions that expect a decision), LLM-judged
+groundedness, steps, evidence items and latency.
+
+What changed from the earlier version of this script:
+    - It imported `domains.*` modules, which only resolves when the
+      repository root is on sys.path, so `python scripts/...` failed; domains
+      are now loaded by path through the domain loader.
+    - It ran a hand-picked 4-question sample per domain by default. The full
+      benchmark runs by default now; use --sample N to limit it.
+    - It reset memory and attached budgets by assigning private runtime
+      attributes; it uses the public API (reset_session, run(budget=...)).
+    - Policy alignment was averaged over ALL questions, counting every
+      question that expects no decision as "aligned", which inflated the
+      percentage. It is averaged over decision questions only now.
+    - A judge call that failed to parse counted as grounded; such rows are
+      now excluded and counted as unjudged.
+    - "Numerical grounding" re-ran verification without the question's own
+      numbers or the policy thresholds, so it disagreed with the loop's
+      verdict. The loop's `answer_verified` is reported instead, alongside
+      expected-number recall.
 
 Usage:
-  uv run python scripts/run_cross_domain_eval.py
+    uv run python scripts/run_cross_domain_eval.py [--domain NAME] [--sample N]
 """
 
 import argparse
 import asyncio
 import json
-from pathlib import Path
 import time
 from typing import Any
 
 from rich.console import Console
 from rich.table import Table
 
-from agent_runtime.agent.budget import BudgetController, allocate_budget, classify_task_complexity
-from agent_runtime.agent.evidence import EvidenceSource
-from agent_runtime.agent.policy import PolicyStatus
-from agent_runtime.agent.verification import verify_numerical_grounding
+from agent_runtime.agent.budget import allocate_budget, classify_task_complexity
 from agent_runtime.config import REPO_ROOT, settings
-from agent_runtime.evaluation.agent_metrics import single_agent_failed, single_agent_tool_names
-from agent_runtime.evaluation.dataset import EvalQuery, load_benchmark
+from agent_runtime.domains import list_domains, load_domain
+from agent_runtime.evaluation.agent_metrics import score_expected_numbers, single_agent_failed, single_agent_tool_names
+from agent_runtime.evaluation.dataset import load_benchmark
 from agent_runtime.evaluation.rag_metrics import score_groundedness
 from agent_runtime.evaluation.run_eval import _judged
 from agent_runtime.llm.ollama_client import OllamaClient
 from agent_runtime.runtime_factory import build_single_agent_runtime
 
-from domains.credit_risk.policies import create_credit_risk_policy_engine
-from domains.enterprise_operations.policies import create_enterprise_ops_policy_engine
-from domains.multimodal_investigation.policies import create_multimodal_policy_engine
-
 console = Console()
-
-OUTPUT_REPORT_PATH = REPO_ROOT / "data" / "cross_domain_evaluation_report.json"
-
-DOMAIN_CONFIGS: dict[str, dict[str, Any]] = {
-    "product_analytics": {
-        "title": "Product Analytics & Growth",
-        "benchmark_path": REPO_ROOT / "domains" / "product_analytics" / "benchmark.json",
-        "server_modules": {"analytics": "agent_runtime.mcp_layer.servers.analytics_server"},
-        "policy_factory": None,  # Will be imported from experiment
-        "sample_query_ids": ["pa-01", "pa-03", "pa-07", "pa-10"],
-    },
-    "credit_risk": {
-        "title": "Credit Risk & Lending",
-        "benchmark_path": REPO_ROOT / "domains" / "credit_risk" / "benchmark.json",
-        "server_modules": {"credit_risk": "agent_runtime.mcp_layer.servers.credit_risk_server"},
-        "policy_factory": create_credit_risk_policy_engine,
-        "sample_query_ids": ["cr-01", "cr-02", "cr-03", "cr-04"],
-    },
-    "multimodal_investigation": {
-        "title": "Multimodal Document & Chart Audit",
-        "benchmark_path": REPO_ROOT / "domains" / "multimodal_investigation" / "benchmark.json",
-        "server_modules": {"vision": "agent_runtime.mcp_layer.servers.vision_server"},
-        "policy_factory": create_multimodal_policy_engine,
-        "sample_query_ids": ["mm-01", "mm-02", "mm-03", "mm-06"],
-    },
-    "enterprise_operations": {
-        "title": "Enterprise SRE & Systems Ops",
-        "benchmark_path": REPO_ROOT / "domains" / "enterprise_operations" / "benchmark.json",
-        "server_modules": {"ops": "agent_runtime.mcp_layer.servers.ops_server"},
-        "policy_factory": create_enterprise_ops_policy_engine,
-        "sample_query_ids": ["ops-01", "ops-02", "ops-03", "ops-05"],
-    },
-}
+REPORT_PATH = REPO_ROOT / "data" / "cross_domain_evaluation_report.json"
 
 
-def _get_product_analytics_policy_engine():
-    from agent_runtime.evaluation.product_analytics_experiment import create_product_analytics_policy_engine
-    return create_product_analytics_policy_engine()
+def _mean(values: list[float]) -> float | None:
+    return sum(values) / len(values) if values else None
 
 
-DOMAIN_CONFIGS["product_analytics"]["policy_factory"] = _get_product_analytics_policy_engine
+async def evaluate_domain(name: str, judge_llm: OllamaClient, sample: int | None) -> dict[str, Any]:
+    domain = load_domain(name)
+    queries = load_benchmark(domain.benchmark_path)[:sample]
+    console.print(f"\n[bold blue]{domain.title}[/bold blue] ({len(queries)} questions)")
 
-
-async def evaluate_domain(
-    domain_key: str,
-    domain_info: dict[str, Any],
-    judge_llm: OllamaClient,
-) -> dict[str, Any]:
-    benchmark_file = domain_info["benchmark_path"]
-    if not benchmark_file.exists():
-        console.print(f"[red]Missing benchmark: {benchmark_file}[/red]")
-        return {"error": f"Benchmark {benchmark_file} not found"}
-
-    all_queries = load_benchmark(benchmark_file)
-    target_ids = set(domain_info["sample_query_ids"])
-    queries = [q for q in all_queries if q.id in target_ids]
-    if not queries:
-        queries = all_queries[:4]
-
-    console.print(f"\n[bold blue]>>> Evaluating Domain: {domain_info['title']} ({len(queries)} scenarios)[/bold blue]")
-
-    policy_engine = domain_info["policy_factory"]()
-    server_modules = domain_info["server_modules"]
-
-    results: list[dict[str, Any]] = []
-
+    rows: list[dict[str, Any]] = []
     async with build_single_agent_runtime(
         with_memory=False,
-        policy_engine=policy_engine,
-        server_modules=server_modules,
+        policy_engine=domain.create_policy_engine(),
+        server_modules=domain.server_modules,
         include_rag=False,
     ) as runtime:
-        for idx, q in enumerate(queries, start=1):
-            console.print(f"  [{idx}/{len(queries)}] {q.id}: {q.question[:65]}...")
-            runtime._short_term.clear()
+        for position, query in enumerate(queries, start=1):
+            console.print(f"  [{position}/{len(queries)}] {query.id}: {query.question[:65]}...")
+            runtime.reset_session()
+            budget = allocate_budget(classify_task_complexity(query.question), mode="adaptive")
 
-            # Allocate adaptive budget
-            complexity = classify_task_complexity(q.question)
-            budget = allocate_budget(complexity, mode="adaptive")
-            controller = BudgetController(budget=budget)
-            runtime._budget_controller = controller
-
-            t0 = time.perf_counter()
-            state = await runtime.run(q.question)
-            latency = time.perf_counter() - t0
+            start = time.perf_counter()
+            state = await runtime.run(query.question, budget=budget)
+            latency = time.perf_counter() - start
 
             answer = state.final_answer or ""
-            evidence_text = "\n\n".join(
-                s.observation for s in state.steps if s.decision.action.value in ("retrieve", "call_tool")
-            )
+            evidence_text = "\n\n".join(step.observation for step in state.steps if step.decision.action.value != "final")
+            grounded, _ = await _judged(score_groundedness(judge_llm, query, answer, evidence_text), default=(None, []))
+            evaluation = state.policy_evaluation
 
-            # Groundedness & Numerical Verification
-            grounded_res = await _judged(
-                score_groundedness(judge_llm, q, answer, evidence_text), default=(True, [])
-            )
-            num_res = verify_numerical_grounding(answer, state.evidence_ledger)
-
-            # Policy compliance check
-            policy_status = (
-                state.policy_evaluation.final_status.value
-                if state.policy_evaluation is not None
-                else "none"
-            )
-            policy_expected = q.expected_policy_status
-            policy_matched = (policy_status == policy_expected) if policy_expected is not None else True
-
-            # Categorize gathered evidence
-            sources = [it.source.value for it in state.evidence_ledger.all()]
-            sql_count = sum(1 for s in sources if s == EvidenceSource.ANALYTICS_SQL.value)
-            vlm_count = sum(1 for s in sources if s == EvidenceSource.VISION_VLM.value)
-            rec_count = sum(1 for s in sources if s == EvidenceSource.RECORD_LOOKUP.value)
-            stat_count = sum(1 for s in sources if s == EvidenceSource.STATISTICS.value)
-
-            row = {
-                "id": q.id,
-                "category": q.category,
+            rows.append({
+                "id": query.id,
+                "category": query.category,
                 "steps": len(state.steps),
                 "evidence_count": len(state.evidence_ledger),
-                "evidence_sources": {
-                    "sql": sql_count,
-                    "vision": vlm_count,
-                    "records": rec_count,
-                    "statistics": stat_count,
-                },
-                "numerical_grounded": num_res.valid,
-                "grounded": bool(grounded_res[0]) if grounded_res[0] is not None else True,
-                "policy_enforced": policy_status,
-                "expected_policy": policy_expected,
-                "policy_aligned": policy_matched,
+                "evidence_sources": sorted({item.source.value for item in state.evidence_ledger.all()}),
+                "answer_verified": state.answer_verified,
+                "numerical_correctness": score_expected_numbers(query.expected_numbers, answer),
+                "grounded": grounded,
+                "policy_status": evaluation.final_status.value if evaluation is not None else None,
+                "expected_policy_status": query.expected_policy_status,
+                "policy_aligned": (
+                    None
+                    if query.expected_policy_status is None
+                    else evaluation is not None and evaluation.final_status.value == query.expected_policy_status
+                ),
                 "tools_used": single_agent_tool_names(state),
-                "latency_seconds": round(latency, 2),
                 "failed": single_agent_failed(state),
-                "final_answer_preview": answer[:120] + "..." if len(answer) > 120 else answer,
-            }
-            results.append(row)
+                "latency_seconds": round(latency, 2),
+                "final_answer": answer,
+            })
 
-    # Domain summary
-    total = len(results)
-    num_grounded_pct = (sum(1 for r in results if r["numerical_grounded"]) / total) * 100.0 if total else 0.0
-    grounded_pct = (sum(1 for r in results if r["grounded"]) / total) * 100.0 if total else 0.0
-    policy_aligned_pct = (sum(1 for r in results if r["policy_aligned"]) / total) * 100.0 if total else 0.0
-    avg_steps = sum(r["steps"] for r in results) / total if total else 0.0
-    avg_evidence = sum(r["evidence_count"] for r in results) / total if total else 0.0
-    avg_latency = sum(r["latency_seconds"] for r in results) / total if total else 0.0
+    def rate(key: str) -> float | None:
+        return _mean([1.0 if row[key] else 0.0 for row in rows if row[key] is not None])
 
     return {
-        "title": domain_info["title"],
-        "scenarios_evaluated": total,
-        "avg_steps": round(avg_steps, 2),
-        "avg_evidence_items": round(avg_evidence, 2),
-        "numerical_grounding_pct": round(num_grounded_pct, 1),
-        "groundedness_pct": round(grounded_pct, 1),
-        "policy_alignment_pct": round(policy_aligned_pct, 1),
-        "avg_latency_s": round(avg_latency, 2),
-        "scenarios": results,
+        "title": domain.title,
+        "questions": len(rows),
+        "answer_verified_rate": rate("answer_verified"),
+        "numerical_correctness": _mean([row["numerical_correctness"] for row in rows if row["numerical_correctness"] is not None]),
+        "policy_alignment": rate("policy_aligned"),
+        "policy_questions": sum(1 for row in rows if row["policy_aligned"] is not None),
+        "groundedness": rate("grounded"),
+        "unjudged_rows": sum(1 for row in rows if row["grounded"] is None),
+        "failure_rate": rate("failed"),
+        "avg_steps": _mean([float(row["steps"]) for row in rows]),
+        "avg_evidence_items": _mean([float(row["evidence_count"]) for row in rows]),
+        "avg_latency_seconds": _mean([row["latency_seconds"] for row in rows]),
+        "rows": rows,
     }
 
 
-def print_cross_domain_matrix(domain_results: dict[str, dict[str, Any]]) -> None:
-    table = Table(title="Cross-Domain Generalization Matrix (Unified Agentic Decision Runtime)")
-    table.add_column("Business Domain", style="bold cyan")
-    table.add_column("Scenarios", justify="right")
-    table.add_column("Avg Steps", justify="right")
-    table.add_column("Avg Evidence", justify="right")
-    table.add_column("Num. Grounding", justify="right", style="green")
-    table.add_column("Groundedness", justify="right", style="green")
-    table.add_column("Policy Alignment", justify="right", style="magenta")
-    table.add_column("Avg Latency (s)", justify="right")
-
-    for dom_key, res in domain_results.items():
-        if "error" in res:
-            continue
-        table.add_row(
-            res["title"],
-            str(res["scenarios_evaluated"]),
-            f"{res['avg_steps']:.1f}",
-            f"{res['avg_evidence_items']:.1f}",
-            f"{res['numerical_grounding_pct']:.1f}%",
-            f"{res['groundedness_pct']:.1f}%",
-            f"{res['policy_alignment_pct']:.1f}%",
-            f"{res['avg_latency_s']:.2f}s",
-        )
-
-    console.print()
+def print_matrix(results: dict[str, dict[str, Any]]) -> None:
+    table = Table(title="Cross-Domain Evaluation")
+    columns = (
+        ("Domain", "title"), ("Qs", "questions"), ("Verified", "answer_verified_rate"),
+        ("Num. correct", "numerical_correctness"), ("Policy aligned", "policy_alignment"),
+        ("Grounded", "groundedness"), ("Failures", "failure_rate"), ("Avg steps", "avg_steps"),
+        ("Avg latency (s)", "avg_latency_seconds"),
+    )
+    for header, _ in columns:
+        table.add_column(header, justify="left" if header == "Domain" else "right")
+    for result in results.values():
+        table.add_row(*(
+            "-" if result[key] is None else f"{result[key]:.2f}" if isinstance(result[key], float) else str(result[key])
+            for _, key in columns
+        ))
     console.print(table)
-    console.print()
 
 
 async def main() -> None:
-    console.print("[bold green]============================================================[/bold green]")
-    console.print("[bold green]   CROSS-DOMAIN AGENTIC DECISION & WORKFLOW RUNTIME EVAL   [/bold green]")
-    console.print("[bold green]============================================================[/bold green]")
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--domain", choices=list_domains(), help="evaluate one domain only")
+    parser.add_argument("--sample", type=int, default=None, help="only the first N questions per domain")
+    args = parser.parse_args()
 
     judge_llm = OllamaClient(model=settings.ollama_model, host=settings.ollama_host)
+    results = {name: await evaluate_domain(name, judge_llm, args.sample) for name in ([args.domain] if args.domain else list_domains())}
 
-    all_domain_results: dict[str, dict[str, Any]] = {}
-
-    for domain_key, domain_info in DOMAIN_CONFIGS.items():
-        res = await evaluate_domain(domain_key, domain_info, judge_llm)
-        all_domain_results[domain_key] = res
-
-    print_cross_domain_matrix(all_domain_results)
-
-    # Save artifact
-    OUTPUT_REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    report_data = {
-        "timestamp": time.time(),
-        "runtime_invariants": [
-            "LLM proposes; deterministic components verify and constrain.",
-            "Append-only Evidence Ledger tracking heterogeneous observations across all domains.",
-            "Deterministic Numerical Verification detecting ungrounded quantitative assertions.",
-            "Deterministic Policy Engine enforcing hierarchical governance (BLOCKED > REQUIRES_APPROVAL > ALLOWED).",
-            "Action Budget Controller preventing exploration thrashing and cost escalation.",
-            "Comprehensive Audit Trace preserving provenance and decision accountability.",
-        ],
-        "domain_results": all_domain_results,
-    }
-    OUTPUT_REPORT_PATH.write_text(json.dumps(report_data, indent=2), encoding="utf-8")
-    console.print(f"[green]Full cross-domain evaluation report saved to {OUTPUT_REPORT_PATH}[/green]")
+    print_matrix(results)
+    REPORT_PATH.write_text(
+        json.dumps({"model": settings.ollama_model, "timestamp": time.time(), "domains": results}, indent=2), encoding="utf-8"
+    )
+    console.print(f"[green]Report written to {REPORT_PATH}[/green]")
 
 
 if __name__ == "__main__":

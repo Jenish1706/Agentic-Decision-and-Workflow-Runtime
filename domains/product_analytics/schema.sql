@@ -12,12 +12,12 @@ CREATE TABLE experiments (
 
 CREATE TABLE daily_checkout_metrics (
     metric_date DATE,
-    period VARCHAR,            -- 'baseline_week' vs 'last_week'
-    device VARCHAR,            -- 'mobile', 'desktop', 'tablet'
-    traffic_source VARCHAR,    -- 'organic', 'paid_search', 'direct'
+    period VARCHAR,            -- 'baseline_week' or 'last_week'
+    device VARCHAR,            -- 'mobile' or 'desktop' (no OS-level breakdown is recorded)
+    traffic_source VARCHAR,    -- 'organic' or 'paid_search'
     checkouts_started INTEGER,
     purchases_completed INTEGER,
-    conversion_rate DOUBLE
+    conversion_rate DOUBLE     -- a fraction: 0.028 = 2.8%
 );
 
 CREATE TABLE funnel_dropoff (

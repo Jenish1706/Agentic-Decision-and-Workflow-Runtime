@@ -7,9 +7,14 @@ project's whole point), so the LLM is used purely as a "produce text
 constrained to this shape" primitive. Native tool-calling would hand
 decision-making back to a provider-specific mechanism this project is
 supposed to demonstrate building from scratch.
-"""
 
-import json
+Only schema failures become `LLMError`. Transport errors (Ollama not
+running, connection dropped) propagate unchanged on purpose: the agent loop
+treats LLMError as "the model produced unusable output" and ends the run
+gracefully with an apology, so converting a dead server into LLMError would
+turn an infrastructure outage into a benchmark full of plausible-looking
+agent failures instead of a visible crash.
+"""
 
 import ollama
 from pydantic import ValidationError
@@ -34,7 +39,7 @@ class OllamaClient(LLMClient):
         working = list(messages)
         last_error: Exception | None = None
 
-        for attempt in range(max_retries + 1):
+        for _ in range(max_retries + 1):
             response = await self._client.chat(
                 model=self._model,
                 messages=[m.model_dump() for m in working],
@@ -43,7 +48,7 @@ class OllamaClient(LLMClient):
             raw = response["message"]["content"]
             try:
                 return schema.model_validate_json(raw)
-            except (ValidationError, json.JSONDecodeError) as exc:
+            except ValidationError as exc:  # also raised for malformed JSON
                 last_error = exc
                 working = working + [
                     Message(role="assistant", content=raw),
