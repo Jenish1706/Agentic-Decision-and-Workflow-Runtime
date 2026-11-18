@@ -10,10 +10,10 @@ from agent_runtime.agent.facts import (
 )
 
 
-def _ledger(*payloads: dict) -> EvidenceLedger:
+def _ledger(*payloads: dict, source: EvidenceSource = EvidenceSource.RECORD_LOOKUP) -> EvidenceLedger:
     ledger = EvidenceLedger()
     for payload in payloads:
-        ledger.add(source=EvidenceSource.ANALYTICS_SQL, query_or_input="q", data=payload, provenance="t", summary="")
+        ledger.add(source=source, query_or_input="q", data=payload, provenance="t", summary="")
     return ledger
 
 
@@ -99,3 +99,35 @@ def test_governed_actions_are_decided_conservatively():
     assert is_governed_action("grant_limit_raise", governed=granting, exempt=exempt)  # unrecognised -> governed
     assert is_governed_action("decline_increase", governed=granting, exempt=exempt)  # mentions a governed word
     assert not is_governed_action("Refer-To-Underwriter", governed=granting, exempt=exempt)
+
+
+def test_facts_from_free_form_sql_cannot_be_conclusive_to_permit():
+    sql_ledger = EvidenceLedger()
+    sql_ledger.add(
+        source=EvidenceSource.ANALYTICS_SQL,
+        query_or_input="SELECT 'ACCT-101' AS account_id, 740 AS credit_score",
+        data={"rows": [{"account_id": "ACCT-101", "credit_score": 740}]},
+        provenance="tool:execute_sql",
+        summary="",
+    )
+    fact = resolve_fact(sql_ledger, "credit_score", entity_key="account_id", entity_value="ACCT-101")
+    assert fact.found
+    assert fact.attributed
+    assert not fact.can_permit
+    assert not fact.conclusive
+
+
+def test_facts_from_record_lookup_can_be_conclusive_to_permit():
+    rec_ledger = EvidenceLedger()
+    rec_ledger.add(
+        source=EvidenceSource.RECORD_LOOKUP,
+        query_or_input="ACCT-101",
+        data={"account_id": "ACCT-101", "credit_score": 740},
+        provenance="tool:get_account_profile",
+        summary="",
+    )
+    fact = resolve_fact(rec_ledger, "credit_score", entity_key="account_id", entity_value="ACCT-101")
+    assert fact.found
+    assert fact.attributed
+    assert fact.can_permit
+    assert fact.conclusive

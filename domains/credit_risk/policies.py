@@ -98,6 +98,10 @@ def create_policy_engine(thresholds: Mapping[str, float]) -> PolicyEngine:
             return PolicyRuleResult.requires_approval(rule, f"Credit score for {target} is not established: {fact.describe()}.")
         if not fact.attributed:
             return PolicyRuleResult.requires_approval(rule, _unattributed("credit score", target))
+        if not fact.can_permit:
+            return PolicyRuleResult.requires_approval(
+                rule, f"Credit score for {target} is from free-form SQL and cannot autonomously permit approval; verified record lookup required."
+            )
         return PolicyRuleResult.allowed(rule, f"Credit score {scores[0]:.0f} meets the {min_score:.0f} minimum.")
 
     def hard_delinquency_cutoff(proposal: ProposedDecision, ctx: DecisionContext) -> PolicyRuleResult:
@@ -117,6 +121,10 @@ def create_policy_engine(thresholds: Mapping[str, float]) -> PolicyEngine:
             )
         if not fact.attributed:
             return PolicyRuleResult.requires_approval(rule, _unattributed("delinquency count", target))
+        if not fact.can_permit:
+            return PolicyRuleResult.requires_approval(
+                rule, f"90-day delinquency history for {target} is from free-form SQL and cannot autonomously permit approval; verified record lookup required."
+            )
         return PolicyRuleResult.allowed(rule, "No severe 90-day delinquencies on record.")
 
     def dti_ceiling(proposal: ProposedDecision, ctx: DecisionContext) -> PolicyRuleResult:
@@ -136,6 +144,10 @@ def create_policy_engine(thresholds: Mapping[str, float]) -> PolicyEngine:
             return PolicyRuleResult.requires_approval(rule, f"DTI ratio for {target} is not established: {fact.describe()}.")
         if not fact.attributed:
             return PolicyRuleResult.requires_approval(rule, _unattributed("DTI ratio", target))
+        if not fact.can_permit:
+            return PolicyRuleResult.requires_approval(
+                rule, f"DTI ratio for {target} is from free-form SQL and cannot autonomously permit approval; verified record lookup required."
+            )
         return PolicyRuleResult.allowed(rule, f"DTI ratio {ratios[0]:.1%} is within the {max_dti:.1%} ceiling.")
 
     def high_limit_increase_approval(proposal: ProposedDecision, ctx: DecisionContext) -> PolicyRuleResult:

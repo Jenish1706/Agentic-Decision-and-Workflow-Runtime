@@ -188,9 +188,9 @@ async def test_facts_about_other_accounts_are_ignored():
 
     statuses = _statuses(state)
     assert statuses["dti_ceiling"] == PolicyStatus.BLOCKED
-    # The ledger also holds ACCT-102's failing 610; only ACCT-104's own 670 counts.
-    assert statuses["minimum_credit_score"] == PolicyStatus.ALLOWED
-    assert "Credit score 670 meets" in state.policy_evaluation.audit_notes
+    # The ledger also holds ACCT-102's failing 610; only ACCT-104's own 670 counts (not blocked, but requires approval because SQL cannot autonomously permit).
+    assert statuses["minimum_credit_score"] == PolicyStatus.REQUIRES_APPROVAL
+    assert "Credit score for ACCT-104 is from free-form SQL" in state.policy_evaluation.audit_notes
 
 
 @pytest.mark.asyncio

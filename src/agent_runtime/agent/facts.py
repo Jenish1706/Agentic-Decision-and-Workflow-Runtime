@@ -95,6 +95,7 @@ class ResolvedFact:
     candidates: tuple[Any, ...] = ()
     evidence_ids: tuple[str, ...] = ()
     attributed: bool = False
+    can_permit: bool = True
 
     @property
     def found(self) -> bool:
@@ -103,12 +104,15 @@ class ResolvedFact:
     @property
     def conclusive(self) -> bool:
         """Strong enough to PERMIT a decision: one agreed value, attributed
-        to the target entity. See "THE ASYMMETRY" in the module docstring."""
-        return self.found and self.attributed
+        to the target entity, and backed by an authoritative source (not model-shaped
+        SQL alone). See "THE ASYMMETRY" in the module docstring."""
+        return self.found and self.attributed and self.can_permit
 
     def describe(self) -> str:
         """Short human-readable explanation for policy audit notes."""
         if self.status is FactStatus.FOUND:
+            if not self.can_permit:
+                return f"{self.field}={self.value!r} (free-form SQL, cannot autonomously permit)"
             return f"{self.field}={self.value!r}"
         if self.status is FactStatus.MISSING:
             return f"{self.field} is not established by any evidence"
@@ -246,6 +250,15 @@ def resolve_fact(
 
     distinct = _distinct([value for value, _ in chosen])
     evidence_ids = tuple(dict.fromkeys(evidence_id for _, evidence_id in chosen))
+    # Evidence the model can shape (free-form SQL) may block or escalate, but never permit.
+    from .evidence import EvidenceSource
+    sources = [
+        ledger.get_by_id(ev_id).source
+        for ev_id in evidence_ids
+        if ledger is not None and ledger.get_by_id(ev_id) is not None
+    ]
+    can_permit = any(src is not EvidenceSource.ANALYTICS_SQL for src in sources) if sources else False
+
     return ResolvedFact(
         field=field,
         status=FactStatus.FOUND if len(distinct) == 1 else FactStatus.CONFLICT,
@@ -253,6 +266,7 @@ def resolve_fact(
         candidates=tuple(distinct),
         evidence_ids=evidence_ids,
         attributed=bool(attributed),
+        can_permit=can_permit,
     )
 
 
