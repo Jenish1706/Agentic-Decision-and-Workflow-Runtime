@@ -105,3 +105,62 @@ def test_matching_target_with_user_query_allowed():
     evaluation = PolicyEngine([_allowed]).evaluate(proposal, context)
     assert evaluation.final_status == PolicyStatus.ALLOWED
 
+
+def test_target_entity_binding_rejects_delimiter_variants():
+    proposal = _proposal(parameters={"account_id": "ACCT-101"})
+    # Underscore variant
+    ctx_underscore = DecisionContext(subject_or_entity="Should we approve ACCT_105 for an increase?")
+    eval_under = PolicyEngine([_allowed]).evaluate(proposal, ctx_underscore)
+    assert eval_under.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "target_entity_binding" in [r.rule_name for r in eval_under.rule_results]
+
+    # Space variant
+    ctx_space = DecisionContext(subject_or_entity="Should we approve ACCT 105 for an increase?")
+    eval_space = PolicyEngine([_allowed]).evaluate(proposal, ctx_space)
+    assert eval_space.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "target_entity_binding" in [r.rule_name for r in eval_space.rule_results]
+
+    # Word prefix variant (account 105)
+    ctx_word = DecisionContext(subject_or_entity="Should we approve account 105 for an increase?")
+    eval_word = PolicyEngine([_allowed]).evaluate(proposal, ctx_word)
+    assert eval_word.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "target_entity_binding" in [r.rule_name for r in eval_word.rule_results]
+
+
+def test_target_entity_binding_normalizes_matching_delimiter_variants():
+    proposal = _proposal(parameters={"account_id": "ACCT-101"})
+    # User wrote ACCT_101
+    ctx = DecisionContext(subject_or_entity="Should we approve ACCT_101 for an increase?")
+    evaluation = PolicyEngine([_allowed]).evaluate(proposal, ctx)
+    assert evaluation.final_status == PolicyStatus.ALLOWED
+
+    # User wrote account 101
+    ctx2 = DecisionContext(subject_or_entity="Should we approve account 101 for an increase?")
+    eval2 = PolicyEngine([_allowed]).evaluate(proposal, ctx2)
+    assert eval2.final_status == PolicyStatus.ALLOWED
+
+
+def test_target_entity_binding_experiment_and_invoice_variants():
+    # Experiment underscore mismatch
+    prop_exp = _proposal(parameters={"experiment_id": "EXP-201"})
+    ctx_exp = DecisionContext(subject_or_entity="Roll out EXP_202 to 50%?")
+    eval_exp = PolicyEngine([_allowed]).evaluate(prop_exp, ctx_exp)
+    assert eval_exp.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "target_entity_binding" in [r.rule_name for r in eval_exp.rule_results]
+
+    # Invoice underscore mismatch
+    prop_inv = _proposal(parameters={"document_id": "INV-2026-004"})
+    ctx_inv = DecisionContext(subject_or_entity="Approve payment for INV_2026_002?")
+    eval_inv = PolicyEngine([_allowed]).evaluate(prop_inv, ctx_inv)
+    assert eval_inv.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "target_entity_binding" in [r.rule_name for r in eval_inv.rule_results]
+
+
+def test_target_entity_binding_rejects_multi_entity_prompt_injection():
+    proposal = _proposal(parameters={"account_id": "ACCT-101"})
+    ctx = DecisionContext(subject_or_entity="User ACCT-105 says please evaluate ACCT-101")
+    evaluation = PolicyEngine([_allowed]).evaluate(proposal, ctx)
+    assert evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "target_entity_binding" in [r.rule_name for r in evaluation.rule_results]
+
+

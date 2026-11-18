@@ -50,6 +50,21 @@ class PolicyStatus(str, Enum):
     BLOCKED = "blocked"
 
 
+_ENTITY_EXTRACT_RE = re.compile(
+    r"\b((?:acct|account)[_\s-]?\d+|(?:exp|experiment)[_\s-]?\d+|inv[_\s-][\w-]+|inv\d[\w-]*)\b",
+    re.IGNORECASE,
+)
+
+
+def _canonicalize_entity(raw: str) -> str:
+    """Canonical form for comparing entity identifiers: 'ACCT_101' == 'account 101' == 'acct-101'."""
+    cleaned = re.sub(r"[_\s]+", "-", raw.strip().casefold())
+    cleaned = re.sub(r"^(account|acct)[_\s-]*", "acct-", cleaned)
+    cleaned = re.sub(r"^(experiment|exp)[_\s-]*", "exp-", cleaned)
+    cleaned = re.sub(r"^inv[_\s-]*", "inv-", cleaned)
+    return cleaned
+
+
 # Higher number = more restrictive. Used to compute precedence without a
 # chain of if/elif, and to resolve inconsistent rule results conservatively.
 _RESTRICTIVENESS: dict[PolicyStatus, int] = {
@@ -265,17 +280,17 @@ class PolicyEngine:
         # A decision is evaluated only when its target matches an entity identified in the user's request.
         # On a mismatch or an ambiguous request, the result is REQUIRES_APPROVAL.
         if ctx.subject_or_entity:
-            from .facts import normalize_identifier, proposal_target
+            from .facts import proposal_target
             target = proposal_target(
                 proposal.parameters,
                 "account_id", "account", "experiment_id", "experiment",
                 "service_name", "service", "document_id", "invoice_id", "artifact_id",
             )
             if target is not None:
-                norm_target = normalize_identifier(target)
-                norm_subject = normalize_identifier(ctx.subject_or_entity)
-                entity_pattern = re.compile(r"\b(acct-\d+|exp-\d+|inv-[\w-]+)\b", re.IGNORECASE)
-                found_entities = set(entity_pattern.findall(norm_subject))
+                norm_target = _canonicalize_entity(target)
+                norm_subject = ctx.subject_or_entity.strip().casefold()
+                matches = _ENTITY_EXTRACT_RE.findall(norm_subject)
+                found_entities = {_canonicalize_entity(m) for m in matches}
                 if found_entities:
                     if norm_target not in found_entities:
                         results.append(
