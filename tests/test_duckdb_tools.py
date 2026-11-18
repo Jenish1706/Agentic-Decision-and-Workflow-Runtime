@@ -56,3 +56,15 @@ def test_file_access_is_disabled_even_for_a_select():
 def test_missing_database_is_reported(tmp_path):
     result = execute_read_only(tmp_path / "missing.duckdb", "SELECT 1")
     assert not result.ok and "generate_data.py" in result.error
+
+
+def test_double_quoted_identifiers_do_not_trip_blocklist():
+    assert validate_read_only_sql('SELECT "set" FROM experiments') is None
+    assert validate_read_only_sql('SELECT "call" AS "use" FROM experiments') is None
+
+
+def test_runaway_query_times_out():
+    result = execute_read_only(DB_PATH, "SELECT count(*) FROM range(10000000000)", timeout_seconds=0.5)
+    assert not result.ok
+    assert "timed out" in result.error.lower()
+

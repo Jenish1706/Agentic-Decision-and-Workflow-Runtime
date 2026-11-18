@@ -28,6 +28,7 @@ OUTPUT BOUNDS
 """
 
 import re
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, datetime
@@ -39,6 +40,7 @@ import duckdb
 from pydantic import BaseModel, Field
 
 MAX_ROWS = 200
+DEFAULT_QUERY_TIMEOUT_SECONDS = 5.0
 
 _PROHIBITED_KEYWORDS = frozenset({
     "insert", "update", "delete", "drop", "alter", "create", "attach", "detach", "copy", "install",
@@ -77,7 +79,12 @@ def read_only_connection(db_path: Path) -> Iterator[duckdb.DuckDBPyConnection]:
     connection = duckdb.connect(
         str(db_path),
         read_only=True,
-        config={"enable_external_access": False, "allow_unsigned_extensions": False},
+        config={
+            "enable_external_access": False,
+            "allow_unsigned_extensions": False,
+            "max_memory": "256MB",
+            "threads": 2,
+        },
     )
     try:
         yield connection
@@ -89,7 +96,9 @@ def _strip_literals_and_comments(query: str) -> str:
     without_block_comments = re.sub(r"/\*.*?\*/", " ", query, flags=re.DOTALL)
     without_line_comments = re.sub(r"--[^\n]*", " ", without_block_comments)
     # '' inside a literal is an escaped quote in SQL, so match it as part of one.
-    return re.sub(r"'(?:[^']|'')*'", "''", without_line_comments)
+    without_strings = re.sub(r"'(?:[^']|'')*'", "''", without_line_comments)
+    # Strip double-quoted identifiers so keywords used as column names (e.g. "set") don't trip the blocklist
+    return re.sub(r'"(?:[^"]|"")*"', '""', without_strings)
 
 
 def validate_read_only_sql(query: str) -> str | None:
@@ -117,8 +126,29 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
-def execute_read_only(db_path: Path, query: str, max_rows: int = 50) -> SqlQueryResult:
-    """Validate and run one read-only query, returning at most MAX_ROWS rows."""
+@contextmanager
+def _timeout_guard(connection: duckdb.DuckDBPyConnection, timeout_seconds: float):
+    interrupted = threading.Event()
+
+    def _interrupt_worker():
+        if not interrupted.wait(timeout_seconds):
+            connection.interrupt()
+
+    timer = threading.Thread(target=_interrupt_worker, daemon=True)
+    timer.start()
+    try:
+        yield
+    finally:
+        interrupted.set()
+
+
+def execute_read_only(
+    db_path: Path,
+    query: str,
+    max_rows: int = 50,
+    timeout_seconds: float = DEFAULT_QUERY_TIMEOUT_SECONDS,
+) -> SqlQueryResult:
+    """Validate and run one read-only query, returning at most MAX_ROWS rows within timeout_seconds."""
     error = validate_read_only_sql(query)
     if error:
         return SqlQueryResult(ok=False, query=query, error=error)
@@ -127,13 +157,21 @@ def execute_read_only(db_path: Path, query: str, max_rows: int = 50) -> SqlQuery
     statement = query.strip().rstrip(";").strip()
     try:
         with read_only_connection(db_path) as connection:
-            cursor = connection.execute(statement)
-            if cursor.description is None:
-                return SqlQueryResult(ok=False, query=query, error="Statement returned no result set.")
-            columns = [description[0] for description in cursor.description]
-            # Fetch one extra row: if it arrives, the result was cut off.
-            fetched = cursor.fetchmany(row_limit + 1)
+            with _timeout_guard(connection, timeout_seconds):
+                cursor = connection.execute(statement)
+                if cursor.description is None:
+                    return SqlQueryResult(ok=False, query=query, error="Statement returned no result set.")
+                columns = [description[0] for description in cursor.description]
+                # Fetch one extra row: if it arrives, the result was cut off.
+                fetched = cursor.fetchmany(row_limit + 1)
     except Exception as exc:  # noqa: BLE001 - SQL errors are reported to the agent, not raised
+        msg = str(exc)
+        if "INTERRUPT" in msg or "Interrupted" in msg:
+            return SqlQueryResult(
+                ok=False,
+                query=query,
+                error=f"Query execution timed out after {timeout_seconds:g}s (compute limit exceeded).",
+            )
         return SqlQueryResult(ok=False, query=query, error=f"SQL execution error: {exc}")
 
     truncated = len(fetched) > row_limit
