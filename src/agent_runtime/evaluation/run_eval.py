@@ -115,6 +115,8 @@ async def run_single_agent(queries: list[EvalQuery], judge_llm: OllamaClient) ->
                 s.observation for s in state.steps if s.decision.action.value in ("retrieve", "call_tool")
             )
             task_success = await _judged(score_task_success(judge_llm, q, answer), default=None)
+            if task_success and not state.answer_verified:
+                task_success = False
             grounded_result = await _judged(
                 score_groundedness(judge_llm, q, answer, evidence_text), default=(None, [])
             )
@@ -156,6 +158,8 @@ async def run_multi_agent(queries: list[EvalQuery], judge_llm: OllamaClient) -> 
             latency = time.perf_counter() - start
 
             task_success = await _judged(score_task_success(judge_llm, q, result.final_answer), default=None)
+            if task_success and not result.grounded:
+                task_success = False
             efficiency = score_search_efficiency(result.retrieval_queries, result.retrieved_chunk_ids)
             per_query.append(
                 {
