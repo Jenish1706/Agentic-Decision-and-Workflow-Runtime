@@ -92,6 +92,15 @@ def out_of_range_claims() -> list[str]:
     return claims
 
 
+def swap_claims() -> list[str]:
+    """Entity swaps: claiming desktop's ~4.1% conversion rate for mobile."""
+    return [
+        "Mobile conversion was 4.1%.",
+        "Mobile conversion rate was 4.0%.",
+        "Mobile conversion was 4.2%.",
+    ]
+
+
 def main() -> None:
     baseline = load_baseline_verifier()
     ledger = build_ledger()
@@ -104,10 +113,16 @@ def main() -> None:
           f"   current {accepted(current, random_claims())}")
     print(f"Out-of-range claims accepted:       baseline {accepted(baseline, out_of_range_claims())}"
           f"   current {accepted(current, out_of_range_claims())}")
+    print(f"Entity swaps accepted:              baseline {accepted(baseline, swap_claims())}"
+          f"   current {accepted(current, swap_claims())}")
 
     reversal = "Variant B fell by 1.33 percentage points."  # evidence: +1.333 pp
     print(f"Direction reversal accepted:        baseline {baseline.verify_numerical_grounding(reversal, ledger).valid}"
           f"   current {current.verify_numerical_grounding(reversal, ledger).valid}")
+
+    version_non_claim = "Mobile conversion dropped to 1.6% because of the iOS 17 update."
+    print(f"Version number accepted as valid:   baseline {baseline.verify_numerical_grounding(version_non_claim, ledger).valid}"
+          f"   current {current.verify_numerical_grounding(version_non_claim, ledger).valid}")
 
     correct = [
         "Mobile conversion dropped from 2.8% to 1.6% last week.",

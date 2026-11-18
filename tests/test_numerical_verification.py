@@ -100,3 +100,52 @@ def test_request_text_does_not_ground_numbers():
     # "LIMIT 50" in the SQL a tool echoes back is not a fact about the data.
     ledger = _ledger({"query": "SELECT * FROM t LIMIT 50", "rows": [{"n": 7}]})
     assert not verify_numerical_grounding("There were 50 orders.", ledger).valid
+
+
+def test_entity_swap_is_rejected():
+    ledger = EvidenceLedger()
+    ledger.add(
+        source=EvidenceSource.ANALYTICS_SQL,
+        query_or_input="SELECT ...",
+        data={
+            "rows": [
+                {"device": "desktop", "conversion_rate": 0.0408},
+                {"device": "mobile", "conversion_rate": 0.028},
+            ]
+        },
+        provenance="db",
+        summary="device conversion rates",
+    )
+    # Claiming desktop's rate for mobile must fail
+    assert not verify_numerical_grounding("Mobile conversion was 4.1%.", ledger).valid
+    # Claiming mobile's own rate passes
+    assert verify_numerical_grounding("Mobile conversion was 2.8%.", ledger).valid
+
+
+def test_version_numbers_are_not_treated_as_claims():
+    ledger = EvidenceLedger()
+    ledger.add(
+        source=EvidenceSource.ANALYTICS_SQL,
+        query_or_input="SELECT ...",
+        data={"rows": [{"device": "mobile", "conversion_rate": 0.016}]},
+        provenance="db",
+        summary="",
+    )
+    # "iOS 17" should not be treated as an unsubstantiated quantitative claim
+    result = verify_numerical_grounding("Mobile conversion dropped to 1.6% because of the iOS 17 update.", ledger)
+    assert result.valid, f"Issues: {result.issues}"
+
+
+def test_metric_mismatch_is_rejected():
+    ledger = EvidenceLedger()
+    ledger.add(
+        source=EvidenceSource.RECORD_LOOKUP,
+        query_or_input="ACCT-101",
+        data={"account_id": "ACCT-101", "credit_score": 740, "dti_ratio": 0.28},
+        provenance="db",
+        summary="",
+    )
+    # Claiming DTI percentage as credit score must fail
+    assert not verify_numerical_grounding("Credit score was 28%.", ledger).valid
+    assert verify_numerical_grounding("DTI ratio was 28%.", ledger).valid
+

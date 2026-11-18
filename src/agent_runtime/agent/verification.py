@@ -161,6 +161,8 @@ class QuantitativeClaim:
     is_verified: bool = False
     matched_evidence_id: str | None = None
     explanation: str = ""
+    sentence: str = ""
+    context_words: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True)
@@ -185,6 +187,8 @@ _NON_METRIC_PATTERNS = [
     # identifiers: EXP-204, ACCT-101, INV-2026-001, CHART-SLA-0926, user_102
     re.compile(r"\b[A-Za-z]+(?:[-_][A-Za-z0-9]+)*[-_]\d[A-Za-z0-9-]*\b"),
     re.compile(r"\bv?\d+(?:\.\d+){2,}\b"),  # versions / builds: 4.12.0
+    # major OS/software/platform/model versions: iOS 17, Android 14, Windows 11, Python 3, v2, version 3
+    re.compile(r"\b(?:iOS|Android|Windows|macOS|OS|Python|Ubuntu|v|version|ver|model)\s*\d+(?:\.\d+)*\b", re.IGNORECASE),
     re.compile(r"\b\d{4}-W\d{2}\b"),  # ISO weeks: 2026-W38
     re.compile(r"\b\d{4}-\d{2}(?:-\d{2})?\b"),  # ISO dates: 2024-11-10
     re.compile(rf"\b{_MONTHS}\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+(?:19|20)\d{{2}}\b", re.IGNORECASE),
@@ -259,6 +263,30 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
     claimed = [False] * len(cleaned)
     claims: list[QuantitativeClaim] = []
 
+    def _sentence_and_words(start: int, end: int) -> tuple[str, frozenset[str]]:
+        def _is_boundary(idx: int) -> bool:
+            ch = text[idx]
+            if ch in "\n\r?!":
+                return True
+            if ch == ".":
+                # Decimal point inside numbers (e.g. 28.0% or 1.6) is not a sentence boundary
+                if idx + 1 < len(text) and text[idx + 1].isdigit():
+                    return False
+                if idx > 0 and text[idx - 1].isdigit():
+                    return False
+                return True
+            return False
+
+        left = start
+        while left > 0 and not _is_boundary(left - 1):
+            left -= 1
+        right = end
+        while right < len(text) and not _is_boundary(right):
+            right += 1
+        s = text[left:right].strip()
+        words = frozenset(re.findall(r"[a-z0-9_-]+", s.lower()))
+        return s, words
+
     def _take(match: re.Match[str], number_group: int) -> bool:
         start, end = match.span(number_group)
         if any(claimed[start:end]):
@@ -270,34 +298,43 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
     for match in _PP_PATTERN.finditer(cleaned):
         if _take(match, 2):
             number = match.group(2)
+            sent, words = _sentence_and_words(match.start(), match.end())
             claims.append(QuantitativeClaim(
                 raw_text=match.group(0).strip(),
                 value=_parse_number(number),
                 claim_type="percentage_points",
                 tolerance=_rounding_tolerance(number),
                 direction=_direction_from(match.group(1)),
+                sentence=sent,
+                context_words=words,
             ))
 
     for match in _PCT_PATTERN.finditer(cleaned):
         if _take(match, 2):
             number = match.group(2)
+            sent, words = _sentence_and_words(match.start(), match.end())
             claims.append(QuantitativeClaim(
                 raw_text=match.group(0).strip(),
                 value=_parse_number(number),
                 claim_type="percentage",
                 tolerance=_rounding_tolerance(number),
                 direction=_direction_from(match.group(1)),
+                sentence=sent,
+                context_words=words,
             ))
 
     for match in _CURRENCY_PATTERN.finditer(cleaned):
         if _take(match, 1):
             number = match.group(1)
             multiplier = _SUFFIX_MULTIPLIER.get((match.group(2) or "").lower(), 1.0)
+            sent, words = _sentence_and_words(match.start(), match.end())
             claims.append(QuantitativeClaim(
                 raw_text=match.group(0).strip(),
                 value=_parse_number(number) * multiplier,
                 claim_type="currency",
                 tolerance=_rounding_tolerance(number, multiplier),
+                sentence=sent,
+                context_words=words,
             ))
 
     for match in _PLAIN_PATTERN.finditer(cleaned):
@@ -310,11 +347,14 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
         if "." not in number and multiplier == 1.0 and value <= 10:
             continue
         _take(match, 1)
+        sent, words = _sentence_and_words(match.start(), match.end())
         claims.append(QuantitativeClaim(
             raw_text=match.group(0).strip(),
             value=value,
             claim_type="count" if match.group(3) else "number",
             tolerance=_rounding_tolerance(number, multiplier),
+            sentence=sent,
+            context_words=words,
         ))
 
     return claims
@@ -345,10 +385,54 @@ class _GroundingValue:
     is_ratio: bool = False  # 0.184 meaning 18.4%
     is_percent: bool = False  # 18.4 already in percent units
     signed_change: bool = False
+    entity_context: Mapping[str, str] = field(default_factory=dict)
 
 
 def _leaf_name(path: str) -> str:
     return re.sub(r"\[\d+\]$", "", path.rsplit(".", 1)[-1])
+
+
+def _extract_entity_context(item: Any, path: str) -> dict[str, str]:
+    """Extract identifying attributes (e.g. device, account_id, variant) for this number."""
+    entities: dict[str, str] = {}
+    if getattr(item, "query_or_input", None):
+        ident_match = re.search(r"\b(?:ACCT|EXP|INV)-\d+\b", str(item.query_or_input), re.IGNORECASE)
+        if ident_match:
+            entities["entity_id"] = ident_match.group(0).lower()
+
+    # Walk the path in item.data to find parent mapping
+    tokens = path.split(".")[1:]
+    curr = getattr(item, "data", {})
+    parent_dict = None
+    for token in tokens:
+        if "[" in token:
+            name, idx_str = token.split("[", 1)
+            idx = int(idx_str.rstrip("]"))
+            if isinstance(curr, Mapping) and name in curr:
+                curr = curr[name]
+            if isinstance(curr, (list, tuple)) and 0 <= idx < len(curr):
+                parent_dict = curr[idx] if isinstance(curr[idx], Mapping) else None
+                curr = curr[idx]
+        elif isinstance(curr, Mapping) and token in curr:
+            parent_dict = curr
+            curr = curr[token]
+        else:
+            break
+
+    if isinstance(parent_dict, Mapping):
+        for k, v in parent_dict.items():
+            if isinstance(v, (str, int)) and not isinstance(v, bool):
+                k_lower = str(k).lower()
+                if k_lower in ("device", "period", "account_id", "user_id", "variant", "segment", "country", "status", "experiment_id", "date", "week"):
+                    entities[k_lower] = str(v).lower()
+
+    leaf = _leaf_name(path).lower()
+    if leaf.endswith("_a") or leaf.endswith(" a"):
+        entities["variant"] = "a"
+    elif leaf.endswith("_b") or leaf.endswith(" b"):
+        entities["variant"] = "b"
+
+    return entities
 
 
 def _classify_field(leaf: str, value: float) -> tuple[bool, bool]:
@@ -416,6 +500,8 @@ def collect_grounding_values(
                 continue
             source_id = path.split(".", 1)[0]
             is_ratio, is_percent = _classify_field(leaf, number)
+            item = ledger.get_by_id(source_id)
+            entity_context = _extract_entity_context(item, path) if item else {}
             values.append(_GroundingValue(
                 value=number,
                 source_id=source_id,
@@ -423,6 +509,7 @@ def collect_grounding_values(
                 is_ratio=is_ratio,
                 is_percent=is_percent or source_id in calculator_ids,
                 signed_change=any(hint in leaf.lower() for hint in _SIGNED_CHANGE_HINTS),
+                entity_context=entity_context,
             ))
         for item in ledger.all():
             # Numbers inside text count too: a retrieved chunk saying "5,000
@@ -493,10 +580,43 @@ def _find_direction_contradiction(claim: QuantitativeClaim, values: list[_Ground
     return None
 
 
-def _match_direct(claim: QuantitativeClaim, values: list[_GroundingValue]) -> tuple[str, str] | None:
+def _entity_and_metric_compatible(
+    claim: QuantitativeClaim,
+    grounding: _GroundingValue,
+    category_values: Mapping[str, set[str]],
+    all_values: list[_GroundingValue],
+) -> tuple[bool, str]:
+    # 1. Entity swap check: if an opposing entity in the same category is mentioned
+    # in the sentence while the evidence's own entity is absent, this is an entity swap.
+    for cat, val in grounding.entity_context.items():
+        all_vals = category_values.get(cat, set())
+        if len(all_vals) > 1:
+            for opp_val in all_vals:
+                if opp_val != val and opp_val in claim.context_words and val not in claim.context_words:
+                    return False, f"entity swap: claimed for '{opp_val}' but evidence is for '{val}'"
+
+    # 2. Metric mismatch check: a percentage claim attributing a DTI value to a credit score
+    if claim.claim_type in ("percentage", "percentage_points"):
+        if grounding.leaf:
+            leaf_lower = grounding.leaf.lower()
+            if "dti" in leaf_lower or "debt" in leaf_lower:
+                if ("credit" in claim.context_words or "score" in claim.context_words) and "dti" not in claim.context_words and "debt" not in claim.context_words:
+                    return False, f"metric mismatch: percentage claim mentions credit/score but evidence is '{grounding.leaf}'"
+
+    return True, ""
+
+
+def _match_direct(
+    claim: QuantitativeClaim,
+    values: list[_GroundingValue],
+    category_values: Mapping[str, set[str]],
+) -> tuple[str, str] | None:
     for grounding in values:
         magnitude = abs(grounding.value) if grounding.signed_change and claim.direction else grounding.value
         if not _unit_matches(magnitude, grounding, claim):
+            continue
+        compatible, _ = _entity_and_metric_compatible(claim, grounding, category_values, values)
+        if not compatible:
             continue
         label = grounding.leaf or "a number in evidence text"
         return grounding.source_id, f"matched {label}={grounding.value:g}"
@@ -512,17 +632,37 @@ def _comparable_groups(values: list[_GroundingValue]) -> list[list[_GroundingVal
         if not grounding.leaf or grounding.source_id.startswith(("policy:", "user_query")):
             continue
         by_leaf.setdefault(grounding.leaf, []).append(grounding)
-        by_source.setdefault(grounding.source_id, []).append(grounding)
-    groups = [*by_leaf.values(), *by_source.values()]
+        if grounding.is_ratio or grounding.is_percent:
+            by_source.setdefault(grounding.source_id, []).append(grounding)
+    groups = [*by_leaf.values(), *[g for g in by_source.values() if len(g) <= 6]]
     return [group for group in groups if 2 <= len(group) <= _MAX_DERIVATION_GROUP]
 
 
-def _match_derived(claim: QuantitativeClaim, values: list[_GroundingValue]) -> tuple[str, str] | None:
+def _match_derived(
+    claim: QuantitativeClaim,
+    values: list[_GroundingValue],
+    category_values: Mapping[str, set[str]],
+) -> tuple[str, str] | None:
     if claim.claim_type not in ("percentage_points", "percentage"):
         return None
     for group in _comparable_groups(values):
         for index, first in enumerate(group):
             for second in group[index + 1:]:
+                # Entities must not conflict between first and second
+                conflict = False
+                for cat in ("device", "account_id", "user_id"):
+                    if cat in first.entity_context and cat in second.entity_context:
+                        if first.entity_context[cat] != second.entity_context[cat]:
+                            conflict = True
+                            break
+                if conflict:
+                    continue
+
+                c1, _ = _entity_and_metric_compatible(claim, first, category_values, values)
+                c2, _ = _entity_and_metric_compatible(claim, second, category_values, values)
+                if not c1 or not c2:
+                    continue
+
                 if claim.claim_type == "percentage_points":
                     # A percentage-point gap is only meaningful between two
                     # rates expressed in the same unit - never between counts.
@@ -585,9 +725,16 @@ def verify_numerical_grounding(
     unverified: list[QuantitativeClaim] = []
     issues: list[str] = []
 
+    category_values: dict[str, set[str]] = {}
+    for g in values:
+        for cat, val in g.entity_context.items():
+            category_values.setdefault(cat, set()).add(val)
+
     for claim in claims:
         contradiction = _find_direction_contradiction(claim, values)
-        match = None if contradiction else (_match_direct(claim, values) or _match_derived(claim, values))
+        match = None if contradiction else (
+            _match_direct(claim, values, category_values) or _match_derived(claim, values, category_values)
+        )
         if match is not None:
             evidence_id, explanation = match
             verified.append(QuantitativeClaim(
