@@ -87,44 +87,38 @@ rates within a mode and use task success across modes.
 (The product analytics and cross-domain harnesses previously counted a failed
 judge call as a task *failure* and as *grounded*.)
 
-## Results: knowledge base (previous revision)
+## Results: knowledge base (previous revision — WITHDRAWN)
 
-> Measured before this revision's fixes - see "Read this first". The memory
-> leak affected the two architectures differently, so the comparison itself,
-> not only its magnitude, needs re-measuring.
+> **Notice:** The earlier LLM-judged quality numbers below were withdrawn after an audit revealed
+> that the evaluation harness leaked conversational short-term memory across benchmark questions,
+> the numerical verifier accepted fabricated figures (50.9%), and unverified last-step answers were
+> counted as successes. These numbers are removed pending a clean re-run.
+> To regenerate clean benchmark results: `uv run python scripts/run_evaluation.py`.
 
 20 queries, `qwen2.5:7b-instruct` via Ollama:
 
-| Metric | Single-agent | Multi-agent |
-|---|---|---|
-| Task success rate | 0.80 | 1.00 |
-| Groundedness rate | 0.95 | 1.00 |
-| Citation correctness | 0.88 | 0.65 |
-| Tool selection accuracy | 0.40 | 0.60 |
-| Avg. unnecessary tool calls | 0.80 | 0.00 |
-| Avg. step count | 4.30 | 1.95 |
-| Failure rate | 0.05 | 0.00 |
-| Avg. latency (s) | 11.07 | 7.94 |
+| Metric | Single-agent | Multi-agent | Status |
+|---|---|---|---|
+| Task success rate | [pending rerun] | [pending rerun] | Withdrawn (memory leakage in harness) |
+| Groundedness rate | [pending rerun] | [pending rerun] | Withdrawn (memory leakage in harness) |
+| Citation correctness | [pending rerun] | [pending rerun] | Withdrawn |
+| Tool selection accuracy | [pending rerun] | [pending rerun] | Withdrawn |
+| Avg. unnecessary tool calls | [pending rerun] | [pending rerun] | Withdrawn |
+| Avg. step count | [pending rerun] | [pending rerun] | Withdrawn |
+| Failure rate | [pending rerun] | [pending rerun] | Withdrawn |
+| Avg. latency (s) | [pending rerun] | [pending rerun] | Withdrawn |
 
-Search efficiency (`evaluation/retrieval_metrics.py`):
+Search efficiency counts (`evaluation/retrieval_metrics.py`):
 
-| Metric | Single-agent | Multi-agent |
-|---|---|---|
-| Avg. retrieval calls | 1.45 | 0.50 |
-| Avg. unique retrieval queries | 0.85 | 0.50 |
-| Avg. chunks consumed | 4.35 | 1.50 |
-| Retrieval redundancy | 0.30 | 0.00 |
-| Repeated query calls (total) | 12 | 0 |
+| Metric | Single-agent | Multi-agent | Notes |
+|---|---|---|---|
+| Avg. retrieval calls | 1.45 | 0.50 | Multi-agent searches once per query by structure |
+| Avg. unique retrieval queries | 0.85 | 0.50 | |
+| Avg. chunks consumed | 4.35 | 1.50 | |
+| Retrieval redundancy | 0.30 | 0.00 | Single agent repeated queries across steps |
+| Repeated query calls (total) | 12 | 0 | Structural in multi-agent RetrieverWorker |
 
-The multi-agent zeros are structural: `RetrieverWorker` searches exactly once
-per query and *cannot* repeat itself.
-
-Three runs of that code gave single-agent task success of 0.75 / 0.65 / 0.80
-and multi-agent 0.95 / 0.95 / 1.00. Because the leaked conversation depended
-on the fixed question order, that spread is sampling noise *on top of* a
-systematic bias, not a clean variance estimate.
-
-**Retrieval** (reliable): Recall@k 0.98 (naive) -> 0.98 (reranked); MRR 0.92
+**Retrieval** (reliable, deterministic): Recall@k 0.98 (naive) -> 0.98 (reranked); MRR 0.92
 (naive) -> 0.93 (reranked).
 
 ### What still stands, and what is now a hypothesis
@@ -178,21 +172,30 @@ the orchestration story largely collapses into a constraint story.
 | Per run, all actions | `max_agent_steps=8` |
 | Context (tokens) | not bounded |
 
-### Results
+### Results (WITHDRAWN — Pending Clean Rerun)
+
+> **Notice:** The quality metrics (Task success, Groundedness, Citation correctness, Failure rate) below
+> were affected by the conversational memory leakage across questions and permissive verification.
+> They are removed pending a clean re-run: `uv run python scripts/run_budget_experiment.py`.
 
 Single-agent, 20 queries per condition (`data/budget_experiment_report.json`):
 
+| Metric | budget=1 | budget=2 | budget=3 | unlimited | Status |
+|---|---|---|---|---|---|
+| Task success | [pending] | [pending] | [pending] | [pending] | Withdrawn (memory leak in harness) |
+| Groundedness | [pending] | [pending] | [pending] | [pending] | Withdrawn (memory leak in harness) |
+| Citation correctness | [pending] | [pending] | [pending] | [pending] | Withdrawn |
+| Failure rate | [pending] | [pending] | [pending] | [pending] | Withdrawn |
+| Avg latency (s) | 10.42 | 11.69 | 11.00 | 13.43 | Historical reference |
+
+Search-behaviour counts (mechanical, unaffected by judge metrics):
+
 | Metric | budget=1 | budget=2 | budget=3 | unlimited |
 |---|---|---|---|---|
-| Task success | 0.90 | 0.70 | 0.70 | 0.70 |
-| Groundedness | 0.95 | 0.90 | 0.90 | 0.95 |
-| Citation correctness | 1.00 | 1.00 | 0.86 | 0.71 |
 | Avg retrieval calls | 0.65 | 1.05 | 1.05 | 1.45 |
 | Avg chunks consumed | 1.95 | 3.15 | 3.15 | 4.35 |
 | Retrieval redundancy | 0.00 | 0.14 | 0.38 | 0.32 |
 | Repeated query calls (total) | 0 | 3 | 8 | 10 |
-| Failure rate | 0.05 | 0.25 | 0.20 | 0.20 |
-| Avg latency (s) | 10.42 | 11.69 | 11.00 | 13.43 |
 
 Out-of-corpus questions answered correctly: 3/3 at budget=1, 1/3 unlimited.
 
@@ -216,21 +219,24 @@ corpus requiring multi-document synthesis should punish a cap of 1.
 > did reset conversation memory per question, but the problems below make the
 > quality columns uninformative.
 
+> **Notice:** The quality metrics below were uninformative or tautological (see inspection notes).
+> They are removed pending a clean re-run: `uv run python scripts/run_product_analytics_experiment.py`.
+
 12 questions from `domains/product_analytics/benchmark.json`, `qwen2.5:7b-instruct`,
 single run per regime (`data/product_analytics_experiment_report.json`):
 
-| Metric | Unconstrained | Fixed | Adaptive |
-|---|---|---|---|
-| Task success rate | 0.33 | 0.42 | 0.42 |
-| "Numerical correctness" (see below) | 1.00 | 1.00 | 1.00 |
-| Groundedness | 0.92 | 0.92 | 0.92 |
-| "Abstention precision" (see below) | 1.00 | 1.00 | 0.00 |
-| Avg steps per task | 5.00 | 3.58 | 3.33 |
-| Total SQL queries | 29 | 17 | 16 |
-| Unnecessary tool calls (total) | 8 | 2 | 4 |
-| Mean latency (s) | 18.27 | 12.15 | 10.39 |
-| Median latency (s) | 11.21 | 9.42 | 9.61 |
-| Latency std. dev. (s) | 17.13 | 8.51 | 6.95 |
+| Metric | Unconstrained | Fixed | Adaptive | Status |
+|---|---|---|---|---|
+| Task success rate | [pending] | [pending] | [pending] | Withdrawn (judge failures counted as task failure) |
+| "Numerical correctness" | [pending] | [pending] | [pending] | Withdrawn (tautological check on already-verified output) |
+| Groundedness | [pending] | [pending] | [pending] | Withdrawn (judge failures counted as grounded) |
+| "Abstention precision" | [pending] | [pending] | [pending] | Withdrawn (evaluated on single question pa-11) |
+| Avg steps per task | 5.00 | 3.58 | 3.33 | Mechanical step count |
+| Total SQL queries | 29 | 17 | 16 | Mechanical query count |
+| Unnecessary tool calls (total) | 8 | 2 | 4 | Exploration count |
+| Mean latency (s) | 18.27 | 12.15 | 10.39 | |
+| Median latency (s) | 11.21 | 9.42 | 9.61 | |
+| Latency std. dev. (s) | 17.13 | 8.51 | 6.95 | |
 
 What the report file itself shows on inspection:
 
