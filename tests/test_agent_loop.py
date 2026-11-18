@@ -249,7 +249,7 @@ async def test_no_budget_by_default_allows_repeated_retrieval():
             ActionDecision(thought="a", action=ActionType.RETRIEVE, query="one"),
             ActionDecision(thought="b", action=ActionType.RETRIEVE, query="two"),
             ActionDecision(thought="c", action=ActionType.RETRIEVE, query="three"),
-            ActionDecision(thought="answer", action=ActionType.FINAL, answer="Done [1]."),
+            ActionDecision(thought="answer", action=ActionType.FINAL, answer="The limit is 5000/s [1]."),
         ]
     )
     runtime = AgentRuntime(llm=llm, tools=ToolRegistry(), rag=_StubRag(chunk), max_steps=6)

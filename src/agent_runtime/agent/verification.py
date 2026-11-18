@@ -83,6 +83,60 @@ _REFUSAL_MARKERS = (
     "insufficient evidence",
 )
 
+_STOPWORDS = frozenset({
+    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are",
+    "aren't", "as", "at", "be", "because", "been", "before", "being", "below", "between", "both",
+    "but", "by", "can", "can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does",
+    "doesn't", "doing", "don't", "down", "during", "each", "few", "for", "from", "further", "had",
+    "hadn't", "has", "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her",
+    "here", "here's", "hers", "herself", "him", "himself", "his", "how", "how's", "i", "i'd",
+    "i'll", "i'm", "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself",
+    "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor", "not", "of", "off",
+    "on", "once", "only", "or", "other", "ought", "our", "ours", "ourselves", "out", "over", "own",
+    "same", "shan't", "she", "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such",
+    "than", "that", "that's", "the", "their", "theirs", "them", "themselves", "then", "there",
+    "there's", "these", "they", "they'd", "they'll", "they're", "they've", "this", "those", "through",
+    "to", "too", "under", "until", "up", "very", "was", "wasn't", "we", "we'd", "we'll", "we're",
+    "we've", "were", "weren't", "what", "what's", "when", "when's", "where", "where's", "which",
+    "while", "who", "who's", "whom", "why", "why's", "with", "won't", "would", "wouldn't", "you",
+    "you'd", "you'll", "you're", "you've", "your", "yours", "yourself", "yourselves"
+})
+
+
+def _stem(token: str) -> str:
+    token = token.lower()
+    for suffix in ("ing", "ies", "es", "ed", "s"):
+        if token.endswith(suffix) and len(token) > len(suffix) + 2:
+            if suffix == "ies":
+                return token[:-3] + "y"
+            return token[:-len(suffix)]
+    return token
+
+
+def _extract_content_tokens(text: str) -> set[str]:
+    cleaned = re.sub(r"\[\d+\]", " ", text.lower()).replace("_", " ").replace("-", " ")
+    tokens = re.findall(r"\b[a-z0-9]+\b", cleaned)
+    return {_stem(t) for t in tokens if t not in _STOPWORDS and len(t) > 1}
+
+
+def chunk_supports_sentence(sentence: str, chunk: Chunk) -> tuple[bool, str]:
+    """Check whether `chunk` contains lexical evidence supporting `sentence`."""
+    sentence_tokens = _extract_content_tokens(sentence)
+    if not sentence_tokens:
+        return True, ""
+
+    chunk_text = f"{chunk.doc_title} {chunk.text}"
+    chunk_tokens = _extract_content_tokens(chunk_text)
+
+    overlap = sentence_tokens & chunk_tokens
+    overlap_ratio = len(overlap) / len(sentence_tokens)
+
+    # Support requires either >= 2 shared content keywords, or >= 1 keyword with >= 40% overlap
+    is_supported = len(overlap) >= 2 or (len(overlap) >= 1 and overlap_ratio >= 0.4)
+    if is_supported:
+        return True, f"supported by {len(overlap)} keywords ({overlap_ratio:.0%}): {sorted(overlap)[:5]}"
+    return False, f"insufficient keyword support: only {len(overlap)} of {len(sentence_tokens)} keywords match ({overlap_ratio:.0%})"
+
 
 def is_refusal(answer: str) -> bool:
     """True when the answer declines to state facts, so it needs no citation.
@@ -139,6 +193,24 @@ def verify_citations(
 
     if not used_tags and citation_map and not has_non_retrieval_evidence and not is_refusal(answer):
         issues.append("Makes claims but cites no sources, even though evidence was retrieved")
+
+    # Verify that each cited chunk actually supports the sentence that cites it
+    for tag in sorted(used_tags):
+        if tag not in citation_map:
+            continue
+        chunk = citation_map[tag]
+        for match in re.finditer(re.escape(tag), answer):
+            start = match.start()
+            left = start
+            while left > 0 and answer[left - 1] not in ".?!\n\r":
+                left -= 1
+            right = match.end()
+            while right < len(answer) and answer[right] not in ".?!\n\r":
+                right += 1
+            sentence = answer[left:right].strip()
+            supported, explanation = chunk_supports_sentence(sentence, chunk)
+            if not supported:
+                issues.append(f"Citation {tag} does not support claim '{sentence}' ({explanation})")
 
     grounded = not issues
     return VerificationResult(
