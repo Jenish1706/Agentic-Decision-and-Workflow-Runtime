@@ -88,3 +88,20 @@ def test_rule_names_and_thresholds_are_exposed():
     assert dict(engine.thresholds) == {"limit": 5}
     with pytest.raises(TypeError):
         engine.thresholds["limit"] = 6  # read-only
+
+
+def test_target_mismatch_with_user_query_requires_approval():
+    proposal = _proposal(parameters={"account_id": "ACCT-101"})
+    # User query is about ACCT-105!
+    context = DecisionContext(subject_or_entity="Should we approve ACCT-105 for an increase?")
+    evaluation = PolicyEngine([_allowed]).evaluate(proposal, context)
+    assert evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "target_entity_binding" in [r.rule_name for r in evaluation.rule_results]
+
+
+def test_matching_target_with_user_query_allowed():
+    proposal = _proposal(parameters={"account_id": "ACCT-101"})
+    context = DecisionContext(subject_or_entity="Should we approve ACCT-101 for an increase?")
+    evaluation = PolicyEngine([_allowed]).evaluate(proposal, context)
+    assert evaluation.final_status == PolicyStatus.ALLOWED
+

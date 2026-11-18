@@ -35,6 +35,7 @@ FAIL-CLOSED DESIGN CHOICES IN THIS FILE
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
+import re
 from types import MappingProxyType
 from typing import Any
 
@@ -259,6 +260,37 @@ class PolicyEngine:
                     "(citations or numbers did not reconcile with evidence); human review required.",
                 )
             )
+
+        # Built-in check 3: Target entity binding (P0-2).
+        # A decision is evaluated only when its target matches an entity identified in the user's request.
+        # On a mismatch or an ambiguous request, the result is REQUIRES_APPROVAL.
+        if ctx.subject_or_entity:
+            from .facts import normalize_identifier, proposal_target
+            target = proposal_target(
+                proposal.parameters,
+                "account_id", "account", "experiment_id", "experiment",
+                "service_name", "service", "document_id", "invoice_id", "artifact_id",
+            )
+            if target is not None:
+                norm_target = normalize_identifier(target)
+                norm_subject = normalize_identifier(ctx.subject_or_entity)
+                entity_pattern = re.compile(r"\b(acct-\d+|exp-\d+|inv-[\w-]+)\b", re.IGNORECASE)
+                found_entities = set(entity_pattern.findall(norm_subject))
+                if found_entities:
+                    if norm_target not in found_entities:
+                        results.append(
+                            PolicyRuleResult.requires_approval(
+                                "target_entity_binding",
+                                f"Proposed target '{target}' does not match entity in user request ({sorted(found_entities)}): '{ctx.subject_or_entity}'.",
+                            )
+                        )
+                    elif len(found_entities) > 1:
+                        results.append(
+                            PolicyRuleResult.requires_approval(
+                                "target_entity_binding",
+                                f"User request is ambiguous across multiple entities ({sorted(found_entities)}); human approval required.",
+                            )
+                        )
 
         for rule_fn in self._rules:
             try:
