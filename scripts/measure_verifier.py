@@ -101,37 +101,101 @@ def swap_claims() -> list[str]:
     ]
 
 
-def main() -> None:
+def measure() -> dict:
     baseline = load_baseline_verifier()
     ledger = build_ledger()
 
-    def accepted(module, claims):
-        count = sum(module.verify_numerical_grounding(claim, ledger).valid for claim in claims)
-        return f"{count}/{len(claims)} ({count / len(claims):.1%})"
+    def count_accepted(module, claims):
+        return sum(module.verify_numerical_grounding(claim, ledger).valid for claim in claims)
 
-    print(f"Random fabricated claims accepted:  baseline {accepted(baseline, random_claims())}"
-          f"   current {accepted(current, random_claims())}")
-    print(f"Out-of-range claims accepted:       baseline {accepted(baseline, out_of_range_claims())}"
-          f"   current {accepted(current, out_of_range_claims())}")
-    print(f"Entity swaps accepted:              baseline {accepted(baseline, swap_claims())}"
-          f"   current {accepted(current, swap_claims())}")
+    r_claims = random_claims()
+    oor_claims = out_of_range_claims()
+    s_claims = swap_claims()
+
+    base_r = count_accepted(baseline, r_claims)
+    curr_r = count_accepted(current, r_claims)
+
+    base_oor = count_accepted(baseline, oor_claims)
+    curr_oor = count_accepted(current, oor_claims)
+
+    base_s = count_accepted(baseline, s_claims)
+    curr_s = count_accepted(current, s_claims)
 
     reversal = "Variant B fell by 1.33 percentage points."  # evidence: +1.333 pp
-    print(f"Direction reversal accepted:        baseline {baseline.verify_numerical_grounding(reversal, ledger).valid}"
-          f"   current {current.verify_numerical_grounding(reversal, ledger).valid}")
+    base_rev = baseline.verify_numerical_grounding(reversal, ledger).valid
+    curr_rev = current.verify_numerical_grounding(reversal, ledger).valid
 
     version_non_claim = "Mobile conversion dropped to 1.6% because of the iOS 17 update."
-    print(f"Version number accepted as valid:   baseline {baseline.verify_numerical_grounding(version_non_claim, ledger).valid}"
-          f"   current {current.verify_numerical_grounding(version_non_claim, ledger).valid}")
+    base_ver = baseline.verify_numerical_grounding(version_non_claim, ledger).valid
+    curr_ver = current.verify_numerical_grounding(version_non_claim, ledger).valid
 
     correct = [
         "Mobile conversion dropped from 2.8% to 1.6% last week.",
         "Variant B converted at 2.9% vs 1.6% for A, a 1.33 pp improvement (p = 0.014).",
         "Mobile checkouts started totalled 2,700 on one day.",
     ]
-    passing = sum(current.verify_numerical_grounding(answer, ledger).valid for answer in correct)
-    print(f"Correct answers accepted (current): {passing}/{len(correct)}")
-    sys.exit(0 if passing == len(correct) else 1)
+    curr_correct = sum(current.verify_numerical_grounding(answer, ledger).valid for answer in correct)
+
+    return {
+        "trials": TRIALS,
+        "random": {
+            "baseline_count": base_r,
+            "baseline_pct": base_r / len(r_claims),
+            "current_count": curr_r,
+            "current_pct": curr_r / len(r_claims),
+        },
+        "out_of_range": {
+            "baseline_count": base_oor,
+            "baseline_pct": base_oor / len(oor_claims),
+            "current_count": curr_oor,
+            "current_pct": curr_oor / len(oor_claims),
+        },
+        "swaps": {
+            "trials": len(s_claims),
+            "baseline_count": base_s,
+            "baseline_pct": base_s / len(s_claims),
+            "current_count": curr_s,
+            "current_pct": curr_s / len(s_claims),
+        },
+        "reversal": {
+            "baseline": "accepted" if base_rev else "rejected",
+            "current": "accepted" if curr_rev else "rejected",
+        },
+        "version": {
+            "baseline": "accepted" if base_ver else "rejected",
+            "current": "accepted" if curr_ver else "rejected",
+        },
+        "correct": {
+            "total": len(correct),
+            "current_count": curr_correct,
+        },
+    }
+
+
+def main() -> None:
+    results = measure()
+    r = results["random"]
+    oor = results["out_of_range"]
+    s = results["swaps"]
+    rev = results["reversal"]
+    ver = results["version"]
+    cor = results["correct"]
+
+    print(f"Random fabricated claims accepted:  baseline {r['baseline_count']}/{results['trials']} ({r['baseline_pct']:.1%})"
+          f"   current {r['current_count']}/{results['trials']} ({r['current_pct']:.1%})")
+    print(f"Out-of-range claims accepted:       baseline {oor['baseline_count']}/{results['trials']} ({oor['baseline_pct']:.1%})"
+          f"   current {oor['current_count']}/{results['trials']} ({oor['current_pct']:.1%})")
+    print(f"Entity swaps accepted:              baseline {s['baseline_count']}/{s['trials']} ({s['baseline_pct']:.1%})"
+          f"   current {s['current_count']}/{s['trials']} ({s['current_pct']:.1%})")
+
+    print(f"Direction reversal accepted:        baseline {rev['baseline'] == 'accepted'}"
+          f"   current {rev['current'] == 'accepted'}")
+
+    print(f"Version number accepted as valid:   baseline {ver['baseline'] == 'accepted'}"
+          f"   current {ver['current'] == 'accepted'}")
+
+    print(f"Correct answers accepted (current): {cor['current_count']}/{cor['total']}")
+    sys.exit(0 if cor['current_count'] == cor['total'] else 1)
 
 
 if __name__ == "__main__":

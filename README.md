@@ -87,9 +87,32 @@ questions, so each question's prompts contained earlier questions and
 answers - for the single agent at every step, for the multi-agent path only
 inside its Researcher worker. The numerical verifier used at the time also
 accepted about half of randomly fabricated numbers (50.9% of 2,000 in a later
-measurement; the current verifier accepts 6.7%). The findings are kept in
+measurement; the current verifier accepts 4.0%). The findings are kept in
 [EVALUATION.md](EVALUATION.md) as hypotheses to re-measure, not as results;
 re-run them with the commands below before quoting any of them.
+
+### Deterministic Verifier Measurements
+
+<!-- BEGIN_VERIFIER_TABLE -->
+| Verifier Check | Baseline (b13a25d) | Current (Deterministic) |
+|---|---|---|
+| Random fabricated claims accepted (2,000 trials) | 1,018 (50.9%) | 79 (4.0%) |
+| Out-of-range claims accepted (2,000 trials) | 67 (3.4%) | 0 (0.0%) |
+| Entity swaps accepted (3 trials) | 3 (100.0%) | 0 (0.0%) |
+| Direction reversal ("fell" for +1.33 pp) | accepted | rejected |
+| Version number in factual sentence ("iOS 17") | accepted | accepted |
+<!-- END_VERIFIER_TABLE -->
+
+<!-- BEGIN_CITATION_TABLE -->
+| Citation Verification Metric | Lexical Overlap Verifier |
+|---|---|
+| Hand-labelled benchmark pairs | 60 (30 supported, 30 unsupported) |
+| Recall (supported citations preserved) | 100.0% (30/30) |
+| Out-of-domain hallucinations rejected | 100.0% (15/15) |
+| In-domain topical overlap false positives | 50.0% (15/30) |
+| Precision | 66.7% (30/45) |
+| Overall Accuracy | 75.0% (45/60) |
+<!-- END_CITATION_TABLE -->
 
 Unaffected by those bugs: retrieval quality (Recall@k 0.98; MRR 0.92 naive ->
 0.93 reranked - deterministic, no LLM involved) and the failure modes

@@ -266,18 +266,39 @@ ledger holds 12 daily checkout rows and one A/B test result (rates, a signed
 difference of +1.333 pp, a p-value). The baseline is the verifier at commit
 `b13a25d`, loaded from git history.
 
+<!-- BEGIN_VERIFIER_TABLE -->
 | | Baseline (b13a25d) | Current |
 |---|---|---|
-| Random fabricated claims accepted (2,000; percentages 0.5-60%, gaps 0.2-15 pp, "fell" 1-90%) | 1,018 (50.9%) | 133 (6.7%) |
+| Random fabricated claims accepted (2,000; percentages 0.5-60%, gaps 0.2-15 pp, "fell" 1-90%) | 1,018 (50.9%) | 79 (4.0%) |
 | Out-of-range claims accepted (2,000; 45-95%, 5-40 pp, counts 3,000-99,000 - no real value or absolute difference in range) | 67 (3.4%) | 0 (0.0%) |
+| Entity swaps accepted (claiming desktop rate for mobile) | 3 (100.0%) | 0 (0.0%) |
 | "Variant B fell by 1.33 percentage points" (evidence: +1.333) | accepted | rejected |
+| Version number accepted as valid ("...iOS 17 update") | accepted | accepted |
 | Three correct answers | - | all accepted |
+<!-- END_VERIFIER_TABLE -->
 
-The random set's residual 6.7% is mostly values that coincide with real ones
+The random set's residual 4.0% is mostly values that coincide with real ones
 at the precision written (e.g. a random "2.8%"), which is correct behaviour.
 The baseline's acceptances came from a flat ±1.5 pp tolerance and from
 searching every pair of numbers for a matching difference. What neither
 version checks is meaning - see the limitations in `agent/verification.py`.
+
+## Measurement: citation support verification
+
+`uv run python scripts/measure_citations.py` - deterministic, no LLM. Evaluates
+whether citation verification correctly rejects unsupported claims and citations
+pointing to irrelevant or fabricated context across 60 hand-labelled pairs.
+
+<!-- BEGIN_CITATION_TABLE -->
+| Metric | Baseline (existence check) | Lexical Overlap Verifier |
+|---|---|---|
+| Benchmark pairs | 60 | 60 (30 supported, 30 unsupported) |
+| Recall (supported citations preserved) | 100.0% (30/30) | 100.0% (30/30) |
+| Out-of-domain hallucinations rejected | 0.0% (0/15) | 100.0% (15/15) |
+| In-domain topical false positives | 100.0% (15/15) | 50.0% (15/30) |
+| Precision | 50.0% | 66.7% |
+| Overall Accuracy | 50.0% | 75.0% |
+<!-- END_CITATION_TABLE -->
 
 ## Measurement: real-model smoke runs of the domain runtime
 

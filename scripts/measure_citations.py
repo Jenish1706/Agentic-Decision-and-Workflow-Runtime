@@ -314,7 +314,7 @@ BENCHMARK_DATA = [
 ]
 
 
-def evaluate_citation_support_benchmark():
+def evaluate_citation_support_benchmark(verbose: bool = True):
     tp = fp = tn = fn = 0
     failures = []
 
@@ -345,24 +345,43 @@ def evaluate_citation_support_benchmark():
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
-    print("================ CITATION SUPPORT BENCHMARK ================")
-    print(f"Total benchmark pairs: {total} (30 supported, 30 unsupported)")
-    print(f"True Positives:  {tp} / 30")
-    print(f"True Negatives:  {tn} / 30")
-    print(f"False Positives: {fp} / 30")
-    print(f"False Negatives: {fn} / 30")
-    print(f"Accuracy:        {accuracy:.1%}")
-    print(f"Precision:       {precision:.1%}")
-    print(f"Recall:          {recall:.1%}")
-    print(f"F1 Score:        {f1:.3f}")
-    print("============================================================")
+    if verbose:
+        print("================ CITATION SUPPORT BENCHMARK ================")
+        print(f"Total benchmark pairs: {total} (30 supported, 30 unsupported)")
+        print(f"True Positives:  {tp} / 30")
+        print(f"True Negatives:  {tn} / 30")
+        print(f"False Positives: {fp} / 30")
+        print(f"False Negatives: {fn} / 30")
+        print(f"Accuracy:        {accuracy:.1%}")
+        print(f"Precision:       {precision:.1%}")
+        print(f"Recall:          {recall:.1%}")
+        print(f"F1 Score:        {f1:.3f}")
+        print("============================================================")
 
-    if failures:
-        print("\nFailures:")
-        for f in failures:
-            print(" -", f)
+        if failures:
+            print("\nFailures:")
+            for f in failures:
+                print(" -", f)
 
-    return accuracy, precision, recall
+    results = {
+        "total": total,
+        "supported_total": 30,
+        "unsupported_total": 30,
+        "tp": tp,
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "failures": failures,
+    }
+    return results
+
+
+def measure() -> dict:
+    return evaluate_citation_support_benchmark(verbose=False)
 
 
 if __name__ == "__main__":
