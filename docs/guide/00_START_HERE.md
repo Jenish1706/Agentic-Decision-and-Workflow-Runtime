@@ -25,10 +25,12 @@ Yes—by enforcing five foundational invariants:
 
 ## 3. Honest Headline Results
 
+<!-- BEGIN_GUIDE00_RESULTS -->
 All measurements are verified and rendered directly by `scripts/render_readme.py`:
-- **Numerical Claim Verification:** Correct answers are accepted at **100.0%** across baseline test suites, while rejecting 100% of entity swaps, metric swaps, and opposite-direction claims. Across 6,000 synthetic trials (plausible percentage shifts, percentage-point gaps, and relative falls), the verifier detects ungrounded numbers. See full breakdown in [README.md#numerical-verification-benchmark](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../../EVALUATION.md).
-- **Citation Entailment Verification:** The verifier eliminates false-positive citations on contradiction probes (such as negation inversions and number substitutions). In offline lexical fallback mode, precision is 85.7% (benchmark) and 83.3% (held-out); with local NLI enabled, precision reaches 90.3% (benchmark) and 100.0% (held-out). See [README.md#citation-verification-benchmark](../../README.md#citation-verification-benchmark).
+- **Numerical Claim Verification:** Correct answers are accepted at **100.0%** across baseline test suites, while rejecting 100% of entity swaps, metric swaps, and synonym swaps. Random fabricated claims are accepted at 3.9% (78/2,000 trials). Near-miss fabricated values in the plausible range are accepted at higher rates: 8.2% for plausible percentages, 30.5% for percentage-point gaps, and 56.4% for relative changes (2,000 trials each). See full breakdown in [README.md#numerical-verification-benchmark](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../../EVALUATION.md).
+- **Citation Entailment Verification:** In offline lexical fallback mode, precision is 83.3% (benchmark, 6/30 contradictions accepted) and 83.3% (held-out); with local NLI enabled, precision reaches 90.3% (benchmark, 3/30 contradictions accepted) and 100.0% (held-out). See [README.md#citation-verification-benchmark](../../README.md#citation-verification-benchmark).
 - **Deterministic Policy Enforcement:** Tested across four business domains (Credit Underwriting, Enterprise Systems Operations, Multimodal Business Operations, and Product Growth Analytics), the policy engine achieves 0 false autonomous approvals on spoofed records and malicious SQL projections.
+<!-- END_GUIDE00_RESULTS -->
 
 ## 4. Reading Order
 

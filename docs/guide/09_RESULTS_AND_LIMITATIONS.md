@@ -10,25 +10,35 @@ All result numbers reflect verified code runs rendered via `scripts/render_readm
 
 ### 1.1 Numerical Verification Benchmark
 - **Artifact Path:** `scripts/measure_verifier.py`, rendered in [README.md](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../../EVALUATION.md).
-- **Correct-Answer Acceptance:** **100.0%** (0 false rejections across baseline verified answers).
+
+<!-- BEGIN_GUIDE09_VERIFIER -->
+- **Correct-Answer Acceptance:** **100.0%** (3/3 accepted across baseline verified answers).
 - **Adversarial Category Rejections:**
   - Entity Swaps: **100% rejected** (6/6 rejected).
   - Synonym Swaps: **100% rejected** (6/6 rejected).
   - Metric Swaps: **100% rejected** (6/6 rejected).
-  - Direction Reversals: **100% rejected** (2/2 rejected).
-- **Synthetic Fabrication Rejections (6,000 trials):**
-  - Plausible-range percentages (2,000 trials): **96.6% rejected**
-  - Percentage-point gaps (2,000 trials): **99.6% rejected**
-  - Relative changes (2,000 trials): **98.2% rejected**
+  - Direction Reversals: **100% rejected** (1/1 rejected).
+- **Synthetic Fabrication Acceptance (6,000 trials):**
+  - Plausible-range percentages (2,000 trials): **8.2% accepted** (164/2,000).
+  - Percentage-point gaps (2,000 trials): **30.5% accepted** (610/2,000).
+  - Relative changes (2,000 trials): **56.4% accepted** (1,128/2,000).
+
+  Near-miss fabrication acceptance is the verifier's known weakness: plausible-range values that happen to fall near a real ledger entry pass at significant rates, especially relative changes.
+<!-- END_GUIDE09_VERIFIER -->
 
 ### 1.2 Citation Entailment Benchmark
 - **Artifact Path:** `scripts/measure_citations.py`, rendered in [README.md](../../README.md#citation-verification-benchmark).
+
+<!-- BEGIN_GUIDE09_CITATION -->
 - **Offline Lexical Fallback Mode:**
-  - Benchmark Set (30 pairs): Precision **85.7%**, Recall **100.0%**.
-  - Held-Out Set (20 pairs, written before tuning): Precision **83.3%**, Recall **100.0%**.
+  - Benchmark Set (60 pairs): Precision **83.3%**, Recall **100.0%**.
+  - Contradictory citations accepted: 6/30 (20%).
+  - Held-Out Set (20 pairs): Precision **83.3%**, Recall **100.0%**.
 - **Neural NLI Mode (`cross-encoder/nli-deberta-v3-xsmall`):**
-  - Benchmark Set: Precision **90.3%**, Recall **93.3%**.
+  - Benchmark Set: Precision **90.3%**, Recall **93.3%**, Accuracy **91.7%**.
+  - Contradictory citations accepted: 3/30 (10%).
   - Held-Out Set: Precision **100.0%**, Recall **100.0%**.
+<!-- END_GUIDE09_CITATION -->
 
 ### 1.3 RAG Retrieval Quality
 - **Artifact Path:** `evaluation/retrieval_metrics.py`, rendered in [EVALUATION.md](../../EVALUATION.md).

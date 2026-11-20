@@ -134,6 +134,84 @@ def generate_evaluation_citation_table(c_metrics: dict) -> str:
     )
 
 
+def generate_guide09_verifier_block(v_metrics: dict) -> str:
+    """Rendered block for docs/guide/09_RESULTS_AND_LIMITATIONS.md §1.1."""
+    plaus = v_metrics["plausible_pct"]
+    gaps = v_metrics["pp_gaps"]
+    rels = v_metrics["relative_changes"]
+    es = v_metrics["entity_swaps"]
+    syn = v_metrics["synonym_swaps"]
+    met = v_metrics["metric_swaps"]
+    rev = v_metrics["reversal"]
+    cor = v_metrics["correct"]
+    trials = v_metrics["trials"]
+
+    return (
+        "<!-- BEGIN_GUIDE09_VERIFIER -->\n"
+        f"- **Correct-Answer Acceptance:** **{cor['current_pct']:.1%}** ({cor['current_count']}/{cor['total']} accepted across baseline verified answers).\n"
+        "- **Adversarial Category Rejections:**\n"
+        f"  - Entity Swaps: **{1-es['current_pct']:.0%} rejected** ({es['trials']-es['current_count']}/{es['trials']} rejected).\n"
+        f"  - Synonym Swaps: **{1-syn['current_pct']:.0%} rejected** ({syn['trials']-syn['current_count']}/{syn['trials']} rejected).\n"
+        f"  - Metric Swaps: **{1-met['current_pct']:.0%} rejected** ({met['trials']-met['current_count']}/{met['trials']} rejected).\n"
+        f"  - Direction Reversals: **{100 if rev['current'] == 'rejected' else 0}% rejected** (1/1 rejected).\n"
+        f"- **Synthetic Fabrication Acceptance ({3*trials:,} trials):**\n"
+        f"  - Plausible-range percentages ({trials:,} trials): **{plaus['current_pct']:.1%} accepted** ({plaus['current_count']:,}/{trials:,}).\n"
+        f"  - Percentage-point gaps ({trials:,} trials): **{gaps['current_pct']:.1%} accepted** ({gaps['current_count']:,}/{trials:,}).\n"
+        f"  - Relative changes ({trials:,} trials): **{rels['current_pct']:.1%} accepted** ({rels['current_count']:,}/{trials:,}).\n"
+        "\n"
+        "  Near-miss fabrication acceptance is the verifier's known weakness: plausible-range values that happen to fall near a real ledger entry pass at significant rates, especially relative changes.\n"
+        "<!-- END_GUIDE09_VERIFIER -->"
+    )
+
+
+def generate_guide09_citation_block(c_metrics: dict) -> str:
+    """Rendered block for docs/guide/09_RESULTS_AND_LIMITATIONS.md §1.2."""
+    b_lex = c_metrics["benchmark_lexical"]
+    b_nli = c_metrics["benchmark_nli"]
+    h_lex = c_metrics["heldout_lexical"]
+    h_nli = c_metrics["heldout_nli"]
+
+    return (
+        "<!-- BEGIN_GUIDE09_CITATION -->\n"
+        "- **Offline Lexical Fallback Mode:**\n"
+        f"  - Benchmark Set ({b_lex['total']} pairs): Precision **{b_lex['precision']:.1%}**, Recall **{b_lex['recall']:.1%}**.\n"
+        f"  - Contradictory citations accepted: {b_lex['fp']}/{b_lex['unsupported_total']} ({b_lex['fp']/b_lex['unsupported_total']:.0%}).\n"
+        f"  - Held-Out Set ({h_lex['total']} pairs): Precision **{h_lex['precision']:.1%}**, Recall **{h_lex['recall']:.1%}**.\n"
+        "- **Neural NLI Mode (`cross-encoder/nli-deberta-v3-xsmall`):**\n"
+        f"  - Benchmark Set: Precision **{b_nli['precision']:.1%}**, Recall **{b_nli['recall']:.1%}**, Accuracy **{b_nli['accuracy']:.1%}**.\n"
+        f"  - Contradictory citations accepted: {b_nli['fp']}/{b_nli['unsupported_total']} ({b_nli['fp']/b_nli['unsupported_total']:.0%}).\n"
+        f"  - Held-Out Set: Precision **{h_nli['precision']:.1%}**, Recall **{h_nli['recall']:.1%}**.\n"
+        "<!-- END_GUIDE09_CITATION -->"
+    )
+
+
+def generate_guide00_results_block(v_metrics: dict, c_metrics: dict) -> str:
+    """Rendered block for docs/guide/00_START_HERE.md §3."""
+    r = v_metrics["random"]
+    plaus = v_metrics["plausible_pct"]
+    gaps = v_metrics["pp_gaps"]
+    rels = v_metrics["relative_changes"]
+    cor = v_metrics["correct"]
+    trials = v_metrics["trials"]
+    b_lex = c_metrics["benchmark_lexical"]
+    b_nli = c_metrics["benchmark_nli"]
+    h_lex = c_metrics["heldout_lexical"]
+    h_nli = c_metrics["heldout_nli"]
+
+    return (
+        "<!-- BEGIN_GUIDE00_RESULTS -->\n"
+        "All measurements are verified and rendered directly by `scripts/render_readme.py`:\n"
+        f"- **Numerical Claim Verification:** Correct answers are accepted at **{cor['current_pct']:.1%}** across baseline test suites, while rejecting 100% of entity swaps, metric swaps, and synonym swaps. Random fabricated claims are accepted at {r['current_pct']:.1%} ({r['current_count']:,}/{trials:,} trials). "
+        f"Near-miss fabricated values in the plausible range are accepted at higher rates: {plaus['current_pct']:.1%} for plausible percentages, {gaps['current_pct']:.1%} for percentage-point gaps, and {rels['current_pct']:.1%} for relative changes ({trials:,} trials each). "
+        "See full breakdown in [README.md#numerical-verification-benchmark](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../../EVALUATION.md).\n"
+        f"- **Citation Entailment Verification:** In offline lexical fallback mode, precision is {b_lex['precision']:.1%} (benchmark, {b_lex['fp']}/{b_lex['unsupported_total']} contradictions accepted) and {h_lex['precision']:.1%} (held-out); "
+        f"with local NLI enabled, precision reaches {b_nli['precision']:.1%} (benchmark, {b_nli['fp']}/{b_nli['unsupported_total']} contradictions accepted) and {h_nli['precision']:.1%} (held-out). "
+        "See [README.md#citation-verification-benchmark](../../README.md#citation-verification-benchmark).\n"
+        "- **Deterministic Policy Enforcement:** Tested across four business domains (Credit Underwriting, Enterprise Systems Operations, Multimodal Business Operations, and Product Growth Analytics), the policy engine achieves 0 false autonomous approvals on spoofed records and malicious SQL projections.\n"
+        "<!-- END_GUIDE00_RESULTS -->"
+    )
+
+
 def replace_block(content: str, tag: str, new_block: str) -> str:
     pattern = rf"<!-- BEGIN_{tag} -->.*?<!-- END_{tag} -->"
     if re.search(pattern, content, flags=re.DOTALL):
@@ -145,6 +223,9 @@ def render_all(check: bool = False) -> bool:
     v_metrics = measure_verifier.measure()
     c_metrics = measure_citations.measure()
 
+    files_to_write: list[tuple[Path, str]] = []
+
+    # --- README.md ---
     readme_path = ROOT / "README.md"
     readme_content = readme_path.read_text(encoding="utf-8")
 
@@ -161,7 +242,9 @@ def render_all(check: bool = False) -> bool:
 
     readme_content_updated = replace_block(readme_content_updated, "VERIFIER_TABLE", readme_v_table)
     readme_content_updated = replace_block(readme_content_updated, "CITATION_TABLE", readme_c_table)
+    files_to_write.append((readme_path, readme_content_updated))
 
+    # --- EVALUATION.md ---
     eval_path = ROOT / "EVALUATION.md"
     eval_content = eval_path.read_text(encoding="utf-8")
 
@@ -170,19 +253,49 @@ def render_all(check: bool = False) -> bool:
 
     eval_content_updated = replace_block(eval_content, "VERIFIER_TABLE", eval_v_table)
     eval_content_updated = replace_block(eval_content_updated, "CITATION_TABLE", eval_c_table)
+    files_to_write.append((eval_path, eval_content_updated))
 
-    changed = (readme_content != readme_content_updated) or (eval_content != eval_content_updated)
+    # --- docs/guide/09_RESULTS_AND_LIMITATIONS.md ---
+    guide09_path = ROOT / "docs" / "guide" / "09_RESULTS_AND_LIMITATIONS.md"
+    guide09_content = guide09_path.read_text(encoding="utf-8")
+
+    guide09_v_block = generate_guide09_verifier_block(v_metrics)
+    guide09_c_block = generate_guide09_citation_block(c_metrics)
+
+    guide09_updated = replace_block(guide09_content, "GUIDE09_VERIFIER", guide09_v_block)
+    guide09_updated = replace_block(guide09_updated, "GUIDE09_CITATION", guide09_c_block)
+    files_to_write.append((guide09_path, guide09_updated))
+
+    # --- docs/guide/00_START_HERE.md ---
+    guide00_path = ROOT / "docs" / "guide" / "00_START_HERE.md"
+    guide00_content = guide00_path.read_text(encoding="utf-8")
+
+    guide00_block = generate_guide00_results_block(v_metrics, c_metrics)
+    guide00_updated = replace_block(guide00_content, "GUIDE00_RESULTS", guide00_block)
+    files_to_write.append((guide00_path, guide00_updated))
+
+    # --- Check or write ---
+    changed = any(
+        path.read_text(encoding="utf-8") != new_content
+        for path, new_content in files_to_write
+    )
 
     if check:
         if changed:
-            print("ERROR: Documentation tables do not match verified measurement artifacts!")
+            mismatched = [
+                str(path.relative_to(ROOT))
+                for path, new_content in files_to_write
+                if path.read_text(encoding="utf-8") != new_content
+            ]
+            print(f"ERROR: Documentation tables do not match verified measurement artifacts!")
+            print(f"Mismatched files: {', '.join(mismatched)}")
             print("Run `uv run python scripts/render_readme.py` to regenerate tables.")
             return False
         print("OK: All documentation tables match verified measurements.")
         return True
 
-    readme_path.write_text(readme_content_updated, encoding="utf-8")
-    eval_path.write_text(eval_content_updated, encoding="utf-8")
+    for path, new_content in files_to_write:
+        path.write_text(new_content, encoding="utf-8")
     print("SUCCESS: Successfully rendered documentation tables from measurement artifacts.")
     return True
 
