@@ -1,29 +1,46 @@
 # Start Here: Agent Runtime Guide
 
-## 1. What This Project Is
+## 1. Threat Model: What Goes Wrong When an LLM Acts
 
-This repository implements a deterministic runtime for agentic workflows, document retrieval (RAG), and policy-governed autonomous decision-making. 
+When an autonomous LLM interacts with external tools and executes real-world business actions, five distinct failure modes emerge:
+1. **Hallucinated Authority:** The model manufactures permissions or executes arbitrary SQL expressions (`SELECT 780 AS credit_score`) to authorize its own sensitive proposals.
+2. **The Confused Deputy:** An attacker requests an action on entity A, but the model proposes actions on entity B (or manipulates file paths), bypassing security checks.
+3. **Fabricated Numbers:** The model invents plausible metrics, swaps numbers across segments (e.g. attributing desktop conversion to mobile), or inverts change directions.
+4. **Misattributed Citations:** The model cites chunks that contradict its claims, match only superficial stopwords, or invert negation.
+5. **Runaway Compute:** The model enters infinite observation loops on ambiguous queries, exhausting token, retrieval, or analytical SQL budgets.
 
-Large Language Models (LLMs) are probabilistic token generators: they can hallucinate facts, invent numbers, misattribute claims, and become confused deputies when prompted maliciously. In enterprise decision pipelines—such as credit underwriting, production incident remediation, invoice payments, and feature rollouts—probabilistic models cannot be granted unconstrained authority to authorize real-world actions.
+---
 
-This runtime enforces a strict trust boundary:
-- The **LLM proposes** actions, reasoning, and answers.
-- An immutable **Evidence Ledger** captures actual observations from external tools (SQL databases, record APIs, document retrieval).
-- Deterministic **Verifiers** check that all numerical claims and document citations in the generated answer match ground-truth evidence.
-- A deterministic **Policy Engine** evaluates the proposed decision against domain thresholds and entity-bound facts.
+## 2. The Invariant
 
-## 2. The Core Question It Answers
+> **The LLM proposes actions, parameters, and textual reasoning; deterministic code verifies facts and decides authority.**
 
-> **Can an autonomous agent make auditable, safe enterprise decisions without allowing generative hallucinations or prompt injections to forge their own authorization?**
+The LLM is strictly confined to intent drafting. Tool execution, policy evaluation, and claim verification run through deterministic code with zero LLM self-evaluation.
 
-Yes—by enforcing five foundational invariants:
-1. **Separation of Proposal from Authorization:** Decisions are evaluated strictly by deterministic rule code, never by the LLM self-scoring its own output.
-2. **Entity-Scoped Evidence:** Facts are bound strictly to the entity requested by the user, derived from domain manifests (`domain_manifest.yaml`), rejecting target substitution attacks.
-3. **The Permission Asymmetry:** Weak or unverified evidence (such as free-form SQL projections) can restrict (block or escalate) an action, but only authoritative whitelisted sources (`permit_tools`) can autonomously permit one.
-4. **Independent Numerical Verification:** Every quantitative claim in the generated text is split by grammatical clause and verified against evidence bounds, domain synonyms, and opposing metric definitions.
-5. **Entailment Citation Verification:** Citations are guarded against negation swaps, number contradictions, and semantic opposition using local NLI cross-encoders with offline lexical fallbacks.
+---
 
-## 3. Honest Headline Results
+## 3. Evidence: Immutable Ledger with Provenance
+
+Observations from external tool calls (SQL databases, record APIs, document retrieval) are stored in an append-only `EvidenceLedger`:
+- **Deep-Frozen Immutability:** Observations are recursively deep-frozen using `MappingProxyType`, preventing downstream tampering.
+- **Asymmetric Permission Provenance (`can_permit`):** Evidence carries an explicit `can_permit` boolean. Unverified or model-shaped queries (such as analytical SQL) have `can_permit = False`. They can restrict (block or escalate) decisions, but only authoritative sources can autonomously permit an action.
+
+---
+
+## 4. Authority: Policy Lattice, Fail-Closed Target Binding, Client-Pinned Permit Tools
+
+- **The Policy Lattice:** Decisions evaluate strictly via deterministic domain rules across a join-semilattice with unambiguous precedence:
+  $$\text{BLOCKED} > \text{REQUIRES\_APPROVAL} > \text{ALLOWED}$$
+- **Fail-Closed Target Binding:** Proposed targets must match the entity requested in the user prompt, resolved from manifest `target_params`. If parameter entities differ or no entity is found, the engine fails closed to `REQUIRES_APPROVAL`.
+- **Client-Pinned Permit Tools:** Authority comes exclusively from `permit_tools` declared in the client's domain manifest (`domain_manifest.yaml`). Server-declared categories (e.g. an untrusted MCP server claiming `category: "record"`) are ignored.
+
+---
+
+## 5. Answer Checks: Numbers and Citations
+
+Before an answer is returned, deterministic verification gates check every claim against the evidence ledger:
+- **Numerical Verification:** Clauses are deconstructed and checked against evidence bounds, domain synonyms, and opposing metric definitions. Plausible near-miss fabrications remain the known challenge (especially relative changes), while random claims and category swaps are reliably rejected.
+- **Citation Verification:** Guarded against negation swaps, number contradictions, and semantic opposition using local NLI cross-encoders with offline lexical fallbacks.
 
 <!-- BEGIN_GUIDE00_RESULTS -->
 All measurements are verified and rendered directly by `scripts/render_readme.py`:
@@ -32,7 +49,24 @@ All measurements are verified and rendered directly by `scripts/render_readme.py
 - **Deterministic Policy Enforcement:** Tested across four business domains (Credit Underwriting, Enterprise Systems Operations, Multimodal Business Operations, and Product Growth Analytics), the policy engine achieves 0 false autonomous approvals on spoofed records and malicious SQL projections.
 <!-- END_GUIDE00_RESULTS -->
 
-## 4. Reading Order
+---
+
+## 6. Evaluation Integrity: Contamination Bugs, Retractions, and LLM Measurement Status
+
+- **Memory Contamination Retraction:** An audit revealed that earlier benchmark runs failed to reset short-term memory between evaluation questions, leaking context and inflating multi-turn scores. The harness now mandates deterministic `runtime.reset_session()` between runs, and contaminated scores were retracted.
+- **LLM Measurement Status:** There is currently **no end-to-end LLM measurement** beyond the 5-question smoke run (`data/eval_report.json`). Large-scale live evaluations (`scripts/run_cross_domain_eval.py` and `scripts/run_budget_experiment.py`) require a configured Ollama instance and remain deferred. All reported benchmark figures for verifiers and policies reflect deterministic code measurements over benchmark datasets.
+
+---
+
+## 7. Known Limits
+
+- **Derivation Coincidences:** Pairwise combinations across multi-row evidence tables can derive values that match fabricated relative changes (currently accepted at significant rates in the plausible range).
+- **Entity Vocabulary:** Subject entity extraction relies on declared domain manifest synonyms and evidence vocabulary; terms outside this vocabulary fail closed.
+- **Benchmark Size:** Hand-crafted benchmarks isolate specific architectural failure modes (60 citation pairs, 20 held-out pairs, 6,000 synthetic trials, and domain suites) rather than forming broad web-scale leaderboards.
+
+---
+
+## 8. Reading Order
 
 1. [00_START_HERE.md](00_START_HERE.md) (This file) — Overview, headline results, and 10-minute quickstart.
 2. [01_CONCEPTS.md](01_CONCEPTS.md) — Intuition, mathematical formulations, worked numeric examples, and code references for every core concept.
@@ -41,12 +75,14 @@ All measurements are verified and rendered directly by `scripts/render_readme.py
 5. [04_METHODOLOGY.md](04_METHODOLOGY.md) — Experimental protocols, baselines, statistical tests, and falsification conditions.
 6. [05_CODE_WALKTHROUGH.md](05_CODE_WALKTHROUGH.md) — Detailed pipeline breakdown by stage, function signatures, and tricky implementation lines.
 7. [06_RUNBOOK.md](06_RUNBOOK.md) — Step-by-step setup, test execution, benchmark regeneration, and troubleshooting.
-8. [07_TESTING.md](07_TESTING.md) — Test suite architecture, coverage map, offline skip mechanisms, and how to write tests.
-9. [08_DESIGN_DECISIONS.md](08_DESIGN_DECISIONS.md) — Architectural Decision Records (ADRs) for the 10 most critical design choices.
+8. [07_TESTING.md](07_TESTING.md) — Test suite map, coverage map, offline skip mechanisms, and how to write tests.
+9. [08_DESIGN_DECISIONS.md](08_DESIGN_DECISIONS.md) — Architectural Decision Records (ADRs) for the 10 major architectural choices.
 10. [09_RESULTS_AND_LIMITATIONS.md](09_RESULTS_AND_LIMITATIONS.md) — Complete experimental results, confidence intervals, negative results, and threat model boundaries.
 11. [GLOSSARY.md](GLOSSARY.md) — Definitions for all abbreviations, acronyms, and specialized terminology.
 
-## 5. 10-Minute Quickstart
+---
+
+## 9. 10-Minute Quickstart
 
 ### Prerequisites
 - Python 3.11+
@@ -56,7 +92,8 @@ All measurements are verified and rendered directly by `scripts/render_readme.py
 ### Installation
 Clone the repository and sync the virtual environment:
 ```bash
-git clone https://github.com/org/agent-runtime.git
+# Clone the repository
+git clone <repository-url> agent-runtime
 cd agent-runtime
 uv sync
 ```

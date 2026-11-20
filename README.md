@@ -1,32 +1,53 @@
 # Agentic Decision & Workflow Runtime
 
-A deterministic execution runtime for LLM workflows, document retrieval (RAG), and policy-governed decision pipelines.
+A deterministic execution runtime for high-stakes LLM workflows, document retrieval (RAG), and policy-governed decision pipelines.
 
-> **Core Invariant:** *The LLM proposes actions and reasoning; deterministic code verifies facts and enforces policy.*
-
-For full conceptual documentation, mathematical formulations, architecture diagrams, and runbooks, see the [Public Documentation Guide](docs/guide/00_START_HERE.md).
+For complete conceptual documentation, mathematical formulations, architecture diagrams, and runbooks, see the [Public Documentation Guide](docs/guide/00_START_HERE.md).
 
 ---
 
-## 1. The Problem & Approach
+## 1. Threat Model: What Goes Wrong When an LLM Acts
 
-Generative language models produce plausible but probabilistic tokens: they can invent figures, swap percentages between segments, invert directions, and hallucinate citations. In high-stakes business decisions (such as credit underwriting, production incident response, or feature rollouts), probabilistic models cannot be granted unconstrained authorization authority.
-
-This runtime enforces a strict trust boundary:
-- **Immutable Evidence:** Observations from tool calls (SQL databases, record APIs, document retrieval) are deep-frozen in an append-only `EvidenceLedger`.
-- **Permission Asymmetry:** Unverified or model-shaped queries (such as free-form SQL) may restrict (block or escalate) an action, but only whitelisted tools (`permit_tools`) can autonomously permit one.
-- **Fail-Closed Target Binding:** Proposed decisions must target the entity requested in the user prompt, blocking confused-deputy attacks.
-- **Deterministic Numerical Verification:** Quantitative claims in generated answers are split by clause and verified against evidence bounds, domain synonyms, and opposing metric definitions.
-- **Citation Entailment:** Citations are guarded against negation swaps, numerical conflicts, and semantic opposition via local NLI cross-encoders with offline lexical fallbacks.
+When an autonomous LLM interacts with external tools and executes real-world business actions, five distinct failure modes emerge:
+1. **Hallucinated Authority:** The model manufactures permissions or executes constant queries (`SELECT 780 AS credit_score`) to authorize its own sensitive proposals.
+2. **The Confused Deputy:** An attacker requests an action on entity A, but the model submits a proposal targeting entity B (or manipulates file paths), bypassing authorization.
+3. **Fabricated Numbers:** The model invents plausible metrics, swaps numbers across segments (e.g. attributing desktop conversion to mobile), or inverts change directions.
+4. **Misattributed Citations:** The model cites chunks that contradict its claims, match only superficial stopwords, or invert negation.
+5. **Runaway Compute:** The model enters infinite observation loops on ambiguous queries, exhausting token, retrieval, or analytical SQL budgets.
 
 ---
 
-## 2. Headline Verified Results
+## 2. The Invariant
 
-All tables below are generated directly from verified measurement scripts (`scripts/render_readme.py --check`).
+> **The LLM proposes actions, parameters, and textual reasoning; deterministic code verifies facts and decides authority.**
+
+The LLM is never granted execution authority. It drafts a `ProposedDecision`. All subsequent fact extraction, policy evaluation, and claim verification run through deterministic code with zero LLM self-evaluation.
+
+---
+
+## 3. Evidence: Immutable Ledger with Provenance
+
+Observations from tool invocations, database queries, and retrieval chunks are collected in an append-only `EvidenceLedger`:
+- **Deep-Frozen Immutability:** Data payloads are recursively frozen via `MappingProxyType`, preventing downstream tampering.
+- **Asymmetric Permission Provenance (`can_permit`):** Every piece of evidence carries a boolean `can_permit` flag. Exploratory or unverified queries (such as analytical SQL) have `can_permit = False`. They can restrict (block or escalate) decisions, but only authoritative sources can autonomously permit an action.
+
+---
+
+## 4. Authority: Policy Lattice, Fail-Closed Target Binding, Client-Pinned Permit Tools
+
+- **The Policy Lattice:** Decisions evaluate strictly via deterministic domain rules across a join-semilattice with unambiguous precedence:
+  $$\text{BLOCKED} > \text{REQUIRES\_APPROVAL} > \text{ALLOWED}$$
+- **Fail-Closed Target Binding:** Proposed targets must match the entity requested in the user prompt, resolved from manifest `target_params`. If parameter entities differ or no entity is found, the engine fails closed to `REQUIRES_APPROVAL`.
+- **Client-Pinned Permit Tools:** Authority comes exclusively from `permit_tools` declared in the client's domain manifest (`domain_manifest.yaml`). Server-declared categories (e.g. an untrusted MCP server claiming `category: "record"`) are ignored.
+
+---
+
+## 5. Answer Checks: Numbers and Citations
+
+Before an answer is returned, deterministic verification gates check every claim against the evidence ledger:
 
 ### Numerical Claim Verification
-Evaluated across 7 categories including 6,000 synthetic trials (plausible shifts, pp gaps, and relative falls) and baseline correct answers (the current verifier accepts 2.9%):
+Near-miss fabrication acceptance is the verifier's primary open challenge: while random claims and category swaps are reliably caught, plausible-range numbers that fall near real ledger values can pass by derivation coincidence:
 
 <!-- BEGIN_VERIFIER_TABLE -->
 | Verifier Check | Baseline (b13a25d) | Current (Deterministic) |
@@ -48,7 +69,7 @@ Evaluated across 7 categories including 6,000 synthetic trials (plausible shifts
 <!-- END_VERIFIER_TABLE -->
 
 ### Citation Entailment Verification
-Measured across 60 hand-labelled benchmark pairs and 20 held-out pairs (written before tuning thresholds):
+Evaluated across 60 hand-labelled benchmark pairs and 20 held-out pairs (written before tuning thresholds), comparing offline lexical matching against local neural NLI cross-encoders:
 
 <!-- BEGIN_CITATION_TABLE -->
 | Citation Verification Metric | Lexical Fallback (Offline) | NLI Entailment (cross-encoder) |
@@ -64,7 +85,22 @@ Measured across 60 hand-labelled benchmark pairs and 20 held-out pairs (written 
 
 ---
 
-## 3. Quickstart
+## 6. Evaluation Integrity: Retractions & Measurement Status
+
+- **Memory Contamination Retraction:** An audit revealed that earlier benchmark runs failed to reset short-term memory between evaluation questions, leaking context and inflating multi-turn scores. The harness now mandates deterministic `runtime.reset_session()` between runs, and contaminated scores were retracted.
+- **LLM Measurement Status:** There is currently **no end-to-end LLM measurement** beyond the 5-question smoke run (`data/eval_report.json`). Large-scale live evaluations (`scripts/run_cross_domain_eval.py` and `scripts/run_budget_experiment.py`) require a configured Ollama instance and remain deferred. All reported benchmark figures for verifiers and policies reflect deterministic code measurements over benchmark datasets.
+
+---
+
+## 7. Known Limits
+
+- **Derivation Coincidences:** Pairwise combinations across multi-row evidence tables can derive values that match fabricated relative changes (currently accepted at significant rates in the plausible range).
+- **Entity Vocabulary:** Subject entity extraction relies on declared domain manifest synonyms and evidence vocabulary; terms outside this vocabulary fail closed.
+- **Benchmark Size:** Hand-crafted benchmarks isolate specific architectural failure modes (60 citation pairs, 20 held-out pairs, 6,000 synthetic trials, and domain suites) rather than forming broad web-scale leaderboards.
+
+---
+
+## 8. Quickstart
 
 ### Prerequisites
 - Python 3.11+
@@ -88,7 +124,7 @@ uv run python scripts/render_readme.py --check
 
 ---
 
-## 4. Documentation Guide
+## 9. Documentation Guide
 
 Read the complete documentation in `docs/guide/`:
 - [00_START_HERE.md](docs/guide/00_START_HERE.md): Reading order, core questions, and 10-minute walkthrough.
@@ -105,15 +141,6 @@ Read the complete documentation in `docs/guide/`:
 
 ---
 
-## 5. Known Limitations
-
-- **In-Memory Vector Search:** The ~31-document knowledge base uses exact dot-product matrix search. Larger corpora (>100k chunks) require approximate nearest-neighbor indices (HNSW).
-- **Simulated Multimodal Extraction:** The multimodal domain processes pre-extracted JSON fixtures rather than running raw vision model OCR in-process.
-- **Air-Gapped Embedding Downloads:** Full neural cross-encoder verification requires cached weights; without cached weights, tests gracefully fall back to lexical verification.
-- **Hand-Crafted Benchmark Scale:** Benchmark sets are designed to isolate category failures rather than compute broad multi-thousand question leaderboards.
-
----
-
-## 6. License
+## 10. License
 
 This project is licensed under the MIT License.
