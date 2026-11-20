@@ -295,14 +295,15 @@ whether citation verification correctly rejects unsupported claims and citations
 pointing to irrelevant or fabricated context across 60 hand-labelled pairs.
 
 <!-- BEGIN_CITATION_TABLE -->
-| Metric | Baseline (existence check) | Lexical Overlap Verifier |
-|---|---|---|
-| Benchmark pairs | 60 | 60 (30 supported, 30 unsupported) |
-| Recall (supported citations preserved) | 100.0% (30/30) | 100.0% (30/30) |
-| Out-of-domain hallucinations rejected | 0.0% (0/15) | 100.0% (15/15) |
-| In-domain topical false positives | 100.0% (15/15) | 50.0% (15/30) |
-| Precision | 50.0% | 66.7% |
-| Overall Accuracy | 50.0% | 75.0% |
+| Metric | Baseline (existence check) | Lexical Fallback | NLI Entailment Verifier |
+|---|---|---|---|
+| Benchmark pairs | 60 | 60 | 60 (30 supported, 30 unsupported) |
+| Recall (supported citations preserved) | 100.0% (30/30) | 100.0% (30/30) | 93.3% (28/30) |
+| Out-of-domain hallucinations rejected | 0.0% (0/15) | 100.0% (15/15) | 100.0% (15/15) |
+| Contradictory citations accepted (false pos.) | 100.0% (15/15) | 20.0% (6/30) | 10.0% (3/30) |
+| Precision | 50.0% | 83.3% | 90.3% |
+| Overall Accuracy | 50.0% | 90.0% | 91.7% |
+| Held-out pairs (20 pairs: 10 supported, 10 unsupported) | - | Precision 83.3%, Recall 100.0% | Precision 100.0%, Recall 100.0% |
 <!-- END_CITATION_TABLE -->
 
 ## Measurement: real-model smoke runs of the domain runtime

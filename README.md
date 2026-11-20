@@ -110,14 +110,15 @@ re-run them with the commands below before quoting any of them.
 <!-- END_VERIFIER_TABLE -->
 
 <!-- BEGIN_CITATION_TABLE -->
-| Citation Verification Metric | Lexical Overlap Verifier |
-|---|---|
-| Hand-labelled benchmark pairs | 60 (30 supported, 30 unsupported) |
-| Recall (supported citations preserved) | 100.0% (30/30) |
-| Out-of-domain hallucinations rejected | 100.0% (15/15) |
-| In-domain topical overlap false positives | 50.0% (15/30) |
-| Precision | 66.7% (30/45) |
-| Overall Accuracy | 75.0% (45/60) |
+| Citation Verification Metric | Lexical Fallback (Offline) | NLI Entailment (cross-encoder) |
+|---|---|---|
+| Hand-labelled benchmark pairs | 60 (30 supported, 30 unsupported) | 60 (30 supported, 30 unsupported) |
+| Recall (supported citations preserved) | 100.0% (30/30) | 93.3% (28/30) |
+| Out-of-domain hallucinations rejected | 100.0% (15/15) | 100.0% (15/15) |
+| Contradictory citations accepted (false pos.) | 6/30 (20.0%) | 3/30 (10.0%) |
+| Precision | 83.3% | 90.3% |
+| Overall Accuracy | 90.0% | 91.7% |
+| Held-out test pairs (20 pairs) | Precision 83.3%, Recall 100.0% | Precision 100.0%, Recall 100.0% |
 <!-- END_CITATION_TABLE -->
 
 Unaffected by those bugs: retrieval quality (Recall@k 0.98; MRR 0.92 naive ->

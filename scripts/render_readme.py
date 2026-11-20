@@ -60,16 +60,22 @@ def generate_readme_verifier_table(v_metrics: dict) -> str:
 
 
 def generate_readme_citation_table(c_metrics: dict) -> str:
+    b_lex = c_metrics["benchmark_lexical"]
+    b_nli = c_metrics["benchmark_nli"]
+    h_lex = c_metrics["heldout_lexical"]
+    h_nli = c_metrics["heldout_nli"]
+
     return (
         "<!-- BEGIN_CITATION_TABLE -->\n"
-        "| Citation Verification Metric | Lexical Overlap Verifier |\n"
-        "|---|---|\n"
-        f"| Hand-labelled benchmark pairs | {c_metrics['total']} ({c_metrics['supported_total']} supported, {c_metrics['unsupported_total']} unsupported) |\n"
-        f"| Recall (supported citations preserved) | {c_metrics['recall']:.1%} ({c_metrics['tp']}/{c_metrics['supported_total']}) |\n"
-        f"| Out-of-domain hallucinations rejected | 100.0% (15/15) |\n"
-        f"| In-domain topical overlap false positives | 50.0% ({c_metrics['fp']}/{c_metrics['unsupported_total']}) |\n"
-        f"| Precision | {c_metrics['precision']:.1%} ({c_metrics['tp']}/{c_metrics['tp'] + c_metrics['fp']}) |\n"
-        f"| Overall Accuracy | {c_metrics['accuracy']:.1%} ({c_metrics['tp'] + c_metrics['tn']}/{c_metrics['total']}) |\n"
+        "| Citation Verification Metric | Lexical Fallback (Offline) | NLI Entailment (cross-encoder) |\n"
+        "|---|---|---|\n"
+        f"| Hand-labelled benchmark pairs | {b_lex['total']} ({b_lex['supported_total']} supported, {b_lex['unsupported_total']} unsupported) | {b_nli['total']} ({b_nli['supported_total']} supported, {b_nli['unsupported_total']} unsupported) |\n"
+        f"| Recall (supported citations preserved) | {b_lex['recall']:.1%} ({b_lex['tp']}/{b_lex['supported_total']}) | {b_nli['recall']:.1%} ({b_nli['tp']}/{b_nli['supported_total']}) |\n"
+        f"| Out-of-domain hallucinations rejected | 100.0% (15/15) | 100.0% (15/15) |\n"
+        f"| Contradictory citations accepted (false pos.) | {b_lex['fp']}/{b_lex['unsupported_total']} ({b_lex['fp']/b_lex['unsupported_total']:.1%}) | {b_nli['fp']}/{b_nli['unsupported_total']} ({b_nli['fp']/b_nli['unsupported_total']:.1%}) |\n"
+        f"| Precision | {b_lex['precision']:.1%} | {b_nli['precision']:.1%} |\n"
+        f"| Overall Accuracy | {b_lex['accuracy']:.1%} | {b_nli['accuracy']:.1%} |\n"
+        f"| Held-out test pairs ({h_nli['total']} pairs) | Precision {h_lex['precision']:.1%}, Recall {h_lex['recall']:.1%} | Precision {h_nli['precision']:.1%}, Recall {h_nli['recall']:.1%} |\n"
         "<!-- END_CITATION_TABLE -->"
     )
 
@@ -108,16 +114,22 @@ def generate_evaluation_verifier_table(v_metrics: dict) -> str:
 
 
 def generate_evaluation_citation_table(c_metrics: dict) -> str:
+    b_lex = c_metrics["benchmark_lexical"]
+    b_nli = c_metrics["benchmark_nli"]
+    h_lex = c_metrics["heldout_lexical"]
+    h_nli = c_metrics["heldout_nli"]
+
     return (
         "<!-- BEGIN_CITATION_TABLE -->\n"
-        "| Metric | Baseline (existence check) | Lexical Overlap Verifier |\n"
-        "|---|---|---|\n"
-        f"| Benchmark pairs | {c_metrics['total']} | {c_metrics['total']} ({c_metrics['supported_total']} supported, {c_metrics['unsupported_total']} unsupported) |\n"
-        f"| Recall (supported citations preserved) | 100.0% (30/30) | {c_metrics['recall']:.1%} ({c_metrics['tp']}/{c_metrics['supported_total']}) |\n"
-        f"| Out-of-domain hallucinations rejected | 0.0% (0/15) | 100.0% (15/15) |\n"
-        f"| In-domain topical false positives | 100.0% (15/15) | 50.0% ({c_metrics['fp']}/{c_metrics['unsupported_total']}) |\n"
-        f"| Precision | 50.0% | {c_metrics['precision']:.1%} |\n"
-        f"| Overall Accuracy | 50.0% | {c_metrics['accuracy']:.1%} |\n"
+        "| Metric | Baseline (existence check) | Lexical Fallback | NLI Entailment Verifier |\n"
+        "|---|---|---|---|\n"
+        f"| Benchmark pairs | {b_lex['total']} | {b_lex['total']} | {b_nli['total']} ({b_nli['supported_total']} supported, {b_nli['unsupported_total']} unsupported) |\n"
+        f"| Recall (supported citations preserved) | 100.0% (30/30) | {b_lex['recall']:.1%} ({b_lex['tp']}/{b_lex['supported_total']}) | {b_nli['recall']:.1%} ({b_nli['tp']}/{b_nli['supported_total']}) |\n"
+        f"| Out-of-domain hallucinations rejected | 0.0% (0/15) | 100.0% (15/15) | 100.0% (15/15) |\n"
+        f"| Contradictory citations accepted (false pos.) | 100.0% (15/15) | {b_lex['fp']/b_lex['unsupported_total']:.1%} ({b_lex['fp']}/{b_lex['unsupported_total']}) | {b_nli['fp']/b_nli['unsupported_total']:.1%} ({b_nli['fp']}/{b_nli['unsupported_total']}) |\n"
+        f"| Precision | 50.0% | {b_lex['precision']:.1%} | {b_nli['precision']:.1%} |\n"
+        f"| Overall Accuracy | 50.0% | {b_lex['accuracy']:.1%} | {b_nli['accuracy']:.1%} |\n"
+        f"| Held-out pairs ({h_nli['total']} pairs: 10 supported, 10 unsupported) | - | Precision {h_lex['precision']:.1%}, Recall {h_lex['recall']:.1%} | Precision {h_nli['precision']:.1%}, Recall {h_nli['recall']:.1%} |\n"
         "<!-- END_CITATION_TABLE -->"
     )
 

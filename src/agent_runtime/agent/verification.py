@@ -119,23 +119,89 @@ def _extract_content_tokens(text: str) -> set[str]:
     return {_stem(t) for t in tokens if t not in _STOPWORDS and len(t) > 1}
 
 
-def chunk_supports_sentence(sentence: str, chunk: Chunk) -> tuple[bool, str]:
-    """Check whether `chunk` contains lexical evidence supporting `sentence`."""
+_CITATION_NEGATIONS = frozenset({
+    "no", "not", "never", "without", "unencrypted", "prohibited", "none",
+    "neither", "cannot", "hardly", "barely", "cleartext", "plaintext"
+})
+
+_NLI_MODEL_INSTANCE: Any = None
+_NLI_MODEL_LOAD_FAILED: bool = False
+
+
+def _get_nli_model() -> Any:
+    global _NLI_MODEL_INSTANCE, _NLI_MODEL_LOAD_FAILED
+    if _NLI_MODEL_LOAD_FAILED:
+        return None
+    if _NLI_MODEL_INSTANCE is None:
+        try:
+            from sentence_transformers import CrossEncoder
+            _NLI_MODEL_INSTANCE = CrossEncoder("cross-encoder/nli-deberta-v3-xsmall")
+        except Exception:
+            _NLI_MODEL_LOAD_FAILED = True
+            return None
+    return _NLI_MODEL_INSTANCE
+
+
+def _extract_negation_words(text: str) -> set[str]:
+    tokens = set(re.findall(r"\b[a-z0-9_-]+\b", text.lower()))
+    return tokens & _CITATION_NEGATIONS
+
+
+def _extract_citation_numbers(text: str) -> list[float]:
+    cleaned = re.sub(r"\[\d+\]", " ", text)
+    nums = []
+    for m in re.finditer(r"\b\d{1,3}(?:,\d{3})+(?:\.\d+)?|\b\d+(?:\.\d+)?\b", cleaned):
+        nums.append(float(m.group(0).replace(",", "")))
+    return nums
+
+
+def chunk_supports_sentence(sentence: str, chunk: Chunk, *, use_nli: bool = True) -> tuple[bool, str]:
+    """Check whether `chunk` contains lexical/entailment evidence supporting `sentence`.
+
+    Employs cheap guards (negation consistency, numerical consistency) and
+    local NLI entailment checking with graceful fallback to lexical overlap.
+    """
+    chunk_text = f"{chunk.doc_title} {chunk.text}"
+
+    # 1. Cheap Negation guard: reject if one is negated and the other is not
+    sent_negs = _extract_negation_words(sentence)
+    chunk_negs = _extract_negation_words(chunk_text)
+    if bool(sent_negs) != bool(chunk_negs):
+        return False, f"negation mismatch between claim ({sorted(sent_negs)}) and chunk ({sorted(chunk_negs)})"
+
+    # 2. Cheap Number guard: reject if both state numbers but they disagree
+    sent_nums = _extract_citation_numbers(sentence)
+    chunk_nums = _extract_citation_numbers(chunk_text)
+    if sent_nums and chunk_nums:
+        if not (set(sent_nums) & set(chunk_nums)):
+            return False, f"numerical mismatch: claim numbers {sent_nums} contradict chunk {chunk_nums}"
+
+    # 3. Lexical overlap check
     sentence_tokens = _extract_content_tokens(sentence)
     if not sentence_tokens:
         return True, ""
 
-    chunk_text = f"{chunk.doc_title} {chunk.text}"
     chunk_tokens = _extract_content_tokens(chunk_text)
-
     overlap = sentence_tokens & chunk_tokens
     overlap_ratio = len(overlap) / len(sentence_tokens)
 
-    # Support requires either >= 2 shared content keywords, or >= 1 keyword with >= 40% overlap
     is_supported = len(overlap) >= 2 or (len(overlap) >= 1 and overlap_ratio >= 0.4)
-    if is_supported:
-        return True, f"supported by {len(overlap)} keywords ({overlap_ratio:.0%}): {sorted(overlap)[:5]}"
-    return False, f"insufficient keyword support: only {len(overlap)} of {len(sentence_tokens)} keywords match ({overlap_ratio:.0%})"
+    if not is_supported:
+        return False, f"insufficient keyword support: only {len(overlap)} of {len(sentence_tokens)} keywords match ({overlap_ratio:.0%})"
+
+    # 4. NLI entailment / contradiction check (if enabled and model available)
+    if use_nli:
+        nli = _get_nli_model()
+        if nli is not None:
+            try:
+                scores = nli.predict([(chunk.text, sentence)])[0]
+                contra, entail = float(scores[0]), float(scores[1])
+                if contra > 3.0 and contra > entail + 2.5:
+                    return False, f"NLI contradiction detected (contra={contra:.2f}, entail={entail:.2f})"
+            except Exception:
+                pass  # Fall back gracefully to lexical result
+
+    return True, f"supported by {len(overlap)} keywords ({overlap_ratio:.0%}): {sorted(overlap)[:5]}"
 
 
 def is_refusal(answer: str) -> bool:
@@ -175,6 +241,7 @@ def verify_citations(
     citation_map: Mapping[str, Chunk],
     *,
     has_non_retrieval_evidence: bool = False,
+    use_nli: bool = True,
 ) -> VerificationResult:
     """Check the answer's [n] tags against what retrieval returned.
 
@@ -208,7 +275,7 @@ def verify_citations(
             while right < len(answer) and answer[right] not in ".?!\n\r":
                 right += 1
             sentence = answer[left:right].strip()
-            supported, explanation = chunk_supports_sentence(sentence, chunk)
+            supported, explanation = chunk_supports_sentence(sentence, chunk, use_nli=use_nli)
             if not supported:
                 issues.append(f"Citation {tag} does not support claim '{sentence}' ({explanation})")
 

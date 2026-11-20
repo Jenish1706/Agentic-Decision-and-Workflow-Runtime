@@ -52,3 +52,47 @@ def test_unsupported_citation_is_flagged():
     assert not result.grounded
     assert any("does not support" in issue for issue in result.issues)
 
+
+def test_contradiction_guards_reject_opposing_numbers_and_negations():
+    timeout_chunk = Chunk(
+        chunk_id="c1",
+        doc_id="d1",
+        doc_title="Timeout Spec",
+        position=0,
+        text="Analytical queries are constrained by a 5-second execution timeout.",
+    )
+    result = verify_citations("Analytical queries have no timeout and run indefinitely [1].", {"[1]": timeout_chunk})
+    assert not result.grounded
+    assert any("does not support" in issue for issue in result.issues)
+
+    crypto_chunk = Chunk(
+        chunk_id="c2",
+        doc_id="d2",
+        doc_title="Crypto Spec",
+        position=0,
+        text="Exported data archives are encrypted at rest using AES-256 keys.",
+    )
+    result2 = verify_citations("Data exports are transmitted in cleartext HTTP without encryption [1].", {"[1]": crypto_chunk})
+    assert not result2.grounded
+    assert any("does not support" in issue for issue in result2.issues)
+
+
+def test_offline_fallback_to_lexical():
+    from agent_runtime.agent.verification import chunk_supports_sentence
+    supported_chunk = Chunk(
+        chunk_id="c3",
+        doc_id="d3",
+        doc_title="Aurora Spec",
+        position=0,
+        text="Aurora enforces a default rate limit of 5,000 events/s.",
+    )
+    # Explicitly test offline / use_nli=False mode
+    supported, explanation = chunk_supports_sentence(
+        "Aurora enforces a default rate limit of 5,000 events/s.",
+        supported_chunk,
+        use_nli=False,
+    )
+    assert supported is True
+    assert "supported" in explanation
+
+

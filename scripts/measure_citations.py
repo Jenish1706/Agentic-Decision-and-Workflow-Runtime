@@ -313,20 +313,126 @@ BENCHMARK_DATA = [
     ),
 ]
 
+HELDOUT_PAIRS = [
+    # ---------------- 10 SUPPORTED HELDOUT PAIRS ----------------
+    (
+        "Aurora persists incoming ingestion records into DuckDB partition tables.",
+        "Ingested telemetry records are written to partitioned DuckDB tables by the Aurora pipeline.",
+        True,
+    ),
+    (
+        "Credit approvals exceeding $5,000 require vice president sign-off.",
+        "Policy escalation threshold: limit requests above $5,000 require approval from VP of Underwriting.",
+        True,
+    ),
+    (
+        "The minimum debt service coverage ratio for commercial applicants is 1.25.",
+        "Commercial credit risk underwriting requires a debt service coverage ratio (DSCR) of at least 1.25.",
+        True,
+    ),
+    (
+        "Service mesh mutual TLS uses certificates rotated every 30 days.",
+        "Internal mTLS encryption enforces a 30-day certificate rotation lifecycle.",
+        True,
+    ),
+    (
+        "Boreas SQL query planner optimizes filter pushdowns to parquet files.",
+        "The query planner pushes predicate filters directly down into Parquet scan operators.",
+        True,
+    ),
+    (
+        "The credit bureau API call times out after 3,000 milliseconds.",
+        "External credit bureau requests are terminated if response time exceeds 3000ms.",
+        True,
+    ),
+    (
+        "Database failover promotes the secondary replica to leader within 30 seconds.",
+        "Automated failover protocol promotes the synchronous standby replica to primary within 30s.",
+        True,
+    ),
+    (
+        "Invoices over $10,000 require two managerial approvals.",
+        "Accounts payable policy mandates two levels of management approval for invoices greater than $10,000.",
+        True,
+    ),
+    (
+        "Redis cache TTL for user permissions is set to 300 seconds.",
+        "Authorization permission cache entries in Redis expire after a 300s TTL.",
+        True,
+    ),
+    (
+        "The checkout service circuit breaker trips when error rate reaches 20%.",
+        "Circuit breaker automatically trips to open state if downstream service error rate reaches 20%.",
+        True,
+    ),
 
-def evaluate_citation_support_benchmark(verbose: bool = True):
+    # ---------------- 10 UNSUPPORTED HELDOUT PAIRS ----------------
+    (
+        "Aurora persists incoming telemetry directly into MongoDB document collections.",
+        "Ingested telemetry records are written to partitioned DuckDB tables by the Aurora pipeline.",
+        False,
+    ),
+    (
+        "Credit limit increases of $5,000 are approved automatically without escalation.",
+        "Policy escalation threshold: limit requests above $5,000 require approval from VP of Underwriting.",
+        False,
+    ),
+    (
+        "Commercial applicants are approved with a debt service coverage ratio of 0.85.",
+        "Commercial credit risk underwriting requires a debt service coverage ratio (DSCR) of at least 1.25.",
+        False,
+    ),
+    (
+        "Service mesh mutual TLS is disabled and communications use unencrypted HTTP.",
+        "Internal mTLS encryption enforces a 30-day certificate rotation lifecycle.",
+        False,
+    ),
+    (
+        "Boreas disables filter pushdown and always performs full table scans.",
+        "The query planner pushes predicate filters directly down into Parquet scan operators.",
+        False,
+    ),
+    (
+        "Credit bureau inquiries wait indefinitely with no timeout configured.",
+        "External credit bureau requests are terminated if response time exceeds 3000ms.",
+        False,
+    ),
+    (
+        "Database failover requires manual intervention and replicas are never promoted automatically.",
+        "Automated failover protocol promotes the synchronous standby replica to primary within 30s.",
+        False,
+    ),
+    (
+        "Invoices over $10,000 are paid immediately without managerial review.",
+        "Accounts payable policy mandates two levels of management approval for invoices greater than $10,000.",
+        False,
+    ),
+    (
+        "Redis permissions cache has no TTL and never expires.",
+        "Authorization permission cache entries in Redis expire after a 300s TTL.",
+        False,
+    ),
+    (
+        "The checkout circuit breaker allows 100% traffic during total downstream failure.",
+        "Circuit breaker automatically trips to open state if downstream service error rate reaches 20%.",
+        False,
+    ),
+]
+
+
+def _evaluate_pairs(dataset: list[tuple[str, str, bool]], *, use_nli: bool = True) -> dict:
     tp = fp = tn = fn = 0
     failures = []
 
-    for idx, (claim, chunk_text, expected_support) in enumerate(BENCHMARK_DATA):
+    for idx, (claim, chunk_text, expected_support) in enumerate(dataset):
         chunk = Chunk(
-            chunk_id=f"bench::{idx}",
-            doc_id="bench_doc",
-            doc_title="Benchmark Documentation",
+            chunk_id=f"doc::{idx}",
+            doc_id="doc",
+            doc_title="Doc",
             position=0,
             text=chunk_text,
         )
-        supported, explanation = chunk_supports_sentence(claim, chunk)
+        supported, explanation = chunk_supports_sentence(claim, chunk, use_nli=use_nli)
 
         if expected_support and supported:
             tp += 1
@@ -339,34 +445,18 @@ def evaluate_citation_support_benchmark(verbose: bool = True):
             fn += 1
             failures.append(f"FALSE NEGATIVE: Claim: '{claim}' | Chunk: '{chunk_text}' | Expl: {explanation}")
 
-    total = len(BENCHMARK_DATA)
-    accuracy = (tp + tn) / total
+    total = len(dataset)
+    supported_total = sum(1 for _, _, exp in dataset if exp)
+    unsupported_total = total - supported_total
+    accuracy = (tp + tn) / total if total else 0.0
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
-    if verbose:
-        print("================ CITATION SUPPORT BENCHMARK ================")
-        print(f"Total benchmark pairs: {total} (30 supported, 30 unsupported)")
-        print(f"True Positives:  {tp} / 30")
-        print(f"True Negatives:  {tn} / 30")
-        print(f"False Positives: {fp} / 30")
-        print(f"False Negatives: {fn} / 30")
-        print(f"Accuracy:        {accuracy:.1%}")
-        print(f"Precision:       {precision:.1%}")
-        print(f"Recall:          {recall:.1%}")
-        print(f"F1 Score:        {f1:.3f}")
-        print("============================================================")
-
-        if failures:
-            print("\nFailures:")
-            for f in failures:
-                print(" -", f)
-
-    results = {
+    return {
         "total": total,
-        "supported_total": 30,
-        "unsupported_total": 30,
+        "supported_total": supported_total,
+        "unsupported_total": unsupported_total,
         "tp": tp,
         "tn": tn,
         "fp": fp,
@@ -377,12 +467,45 @@ def evaluate_citation_support_benchmark(verbose: bool = True):
         "f1": f1,
         "failures": failures,
     }
-    return results
 
 
 def measure() -> dict:
-    return evaluate_citation_support_benchmark(verbose=False)
+    b_lex = _evaluate_pairs(BENCHMARK_DATA, use_nli=False)
+    b_nli = _evaluate_pairs(BENCHMARK_DATA, use_nli=True)
+    h_lex = _evaluate_pairs(HELDOUT_PAIRS, use_nli=False)
+    h_nli = _evaluate_pairs(HELDOUT_PAIRS, use_nli=True)
+
+    return {
+        **b_nli,  # Default top-level for backward compatibility
+        "benchmark_lexical": b_lex,
+        "benchmark_nli": b_nli,
+        "heldout_lexical": h_lex,
+        "heldout_nli": h_nli,
+    }
+
+
+def main() -> None:
+    results = measure()
+    b_lex = results["benchmark_lexical"]
+    b_nli = results["benchmark_nli"]
+    h_lex = results["heldout_lexical"]
+    h_nli = results["heldout_nli"]
+
+    print("================ CITATION SUPPORT MEASUREMENT ================")
+    print(f"Benchmark Set (60 pairs):")
+    print(f"  Lexical Mode:  Recall {b_lex['recall']:.1%} ({b_lex['tp']}/{b_lex['supported_total']}), "
+          f"Precision {b_lex['precision']:.1%} ({b_lex['tp']}/{b_lex['tp'] + b_lex['fp']}), "
+          f"False Positives {b_lex['fp']}/{b_lex['unsupported_total']}")
+    print(f"  NLI Mode:      Recall {b_nli['recall']:.1%} ({b_nli['tp']}/{b_nli['supported_total']}), "
+          f"Precision {b_nli['precision']:.1%} ({b_nli['tp']}/{b_nli['tp'] + b_nli['fp']}), "
+          f"False Positives {b_nli['fp']}/{b_nli['unsupported_total']}")
+    print(f"\nHeld-Out Set (20 pairs):")
+    print(f"  Lexical Mode:  Recall {h_lex['recall']:.1%} ({h_lex['tp']}/{h_lex['supported_total']}), "
+          f"Precision {h_lex['precision']:.1%} ({h_lex['tp']}/{h_lex['tp'] + h_lex['fp']})")
+    print(f"  NLI Mode:      Recall {h_nli['recall']:.1%} ({h_nli['tp']}/{h_nli['supported_total']}), "
+          f"Precision {h_nli['precision']:.1%} ({h_nli['tp']}/{h_nli['tp'] + h_nli['fp']})")
+    print("==============================================================")
 
 
 if __name__ == "__main__":
-    evaluate_citation_support_benchmark()
+    main()
