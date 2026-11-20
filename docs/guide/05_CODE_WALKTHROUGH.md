@@ -138,14 +138,14 @@ This document provides a thorough walkthrough of every important module, script,
       *,
       query: str = "",
       reference_values: Mapping[str, float] | None = None,
-  ) -> VerificationResult: ...
+  ) -> NumericalVerificationResult: ...
 
   def verify_citations(
       answer: str,
       citation_map: dict[str, Chunk],
       *,
       has_non_retrieval_evidence: bool = False,
-  ) -> CitationVerificationResult: ...
+  ) -> VerificationResult: ...
   ```
 - **Non-obvious details:**
   1. **Clause Splitting:** Sentences with multiple numbers (e.g. *"Mobile was 4.1% while desktop fell to 1.6%"*) are split into clauses by conjunctions (`while`, `vs`) and punctuation, ensuring `desktop` does not cross-contaminate the `mobile` claim.
