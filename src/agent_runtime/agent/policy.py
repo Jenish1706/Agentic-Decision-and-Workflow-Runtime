@@ -50,19 +50,67 @@ class PolicyStatus(str, Enum):
     BLOCKED = "blocked"
 
 
-_ENTITY_EXTRACT_RE = re.compile(
-    r"\b((?:acct|account)[_\s-]?\d+|(?:exp|experiment)[_\s-]?\d+|inv[_\s-][\w-]+|inv\d[\w-]*)\b",
-    re.IGNORECASE,
-)
-
-
 def _canonicalize_entity(raw: str) -> str:
     """Canonical form for comparing entity identifiers: 'ACCT_101' == 'account 101' == 'acct-101'."""
-    cleaned = re.sub(r"[_\s]+", "-", raw.strip().casefold())
-    cleaned = re.sub(r"^(account|acct)[_\s-]*", "acct-", cleaned)
-    cleaned = re.sub(r"^(experiment|exp)[_\s-]*", "exp-", cleaned)
-    cleaned = re.sub(r"^inv[_\s-]*", "inv-", cleaned)
+    cleaned = re.sub(r"[_\s#]+", "-", raw.strip().casefold())
+    cleaned = re.sub(r"^(?:account|acct|customer|applicant)[_\s-]*(?:number|num|no)?[_\s-]*", "acct-", cleaned)
+    cleaned = re.sub(r"^(?:experiment|exp)[_\s-]*(?:number|num|no)?[_\s-]*", "exp-", cleaned)
+    cleaned = re.sub(r"^(?:invoice|inv)[_\s-]*(?:number|num|no)?[_\s-]*", "inv-", cleaned)
+    cleaned = re.sub(r"^inc[_\s-]*", "inc-", cleaned)
     return cleaned
+
+
+def _clean_inv_match(m: re.Match) -> str:
+    raw = m.group(1) or m.group(2)
+    norm = re.sub(r"[_\s]+", "-", raw.casefold())
+    norm = re.sub(r"^(?:inv|invoice)-?", "", norm)
+    return f"inv-{norm}"
+
+
+def _clean_inc_match(m: re.Match) -> str:
+    norm = re.sub(r"[_\s]+", "-", m.group(1).casefold())
+    norm = re.sub(r"^inc-?", "", norm)
+    return f"inc-{norm}"
+
+
+_DEFAULT_ENTITY_PATTERNS = [
+    # Accounts
+    (
+        re.compile(
+            r"(?i)\b(?:(?:acct|account|customer|applicant)(?:[_\s]+(?:on|for)[_\s]+(?:the[_\s]+)?account)?[_\s-]*(?:number|num|no)?[_\s#-]*(\d+)|acct[_\s-]?(\d+))\b"
+        ),
+        lambda m: f"acct-{m.group(1) or m.group(2)}",
+    ),
+    # Experiments
+    (
+        re.compile(
+            r"(?i)\b(?:(?:experiment|exp)[_\s-]*(?:number|num|no)?[_\s#-]*(\d+)|exp[_\s-]?(\d+))\b"
+        ),
+        lambda m: f"exp-{m.group(1) or m.group(2)}",
+    ),
+    # Invoices
+    (
+        re.compile(
+            r"(?i)\b(?:(?:invoice|inv)[_\s-]*(?:number|num|no)?[_\s#-]*(?:inv[_\s-]*)?([a-z0-9]+(?:[-_][a-z0-9]+)+|\d+)|inv[_\s-]([a-z0-9_-]+))\b"
+        ),
+        _clean_inv_match,
+    ),
+    # Services
+    (
+        re.compile(r"(?i)\b([a-z0-9]+(?:-[a-z0-9]+)*(?:-service|-api|-worker|-gateway))\b"),
+        lambda m: m.group(1).casefold(),
+    ),
+    # Incidents
+    (
+        re.compile(r"(?i)\b(inc[_\s-]?\d+)\b"),
+        _clean_inc_match,
+    ),
+    # Artifacts
+    (
+        re.compile(r"(?i)\b(latency_sla_[a-z0-9_]+)\b"),
+        lambda m: m.group(1).casefold(),
+    ),
+]
 
 
 # Higher number = more restrictive. Used to compute precedence without a
@@ -226,11 +274,13 @@ class PolicyEngine:
         thresholds: Mapping[str, float] | None = None,
         name: str = "policy",
         guidance: str = "",
+        entity_binding: Mapping[str, Any] | None = None,
     ):
         self._rules: list[PolicyRuleFn] = list(rules or [])
         self._thresholds: Mapping[str, float] = MappingProxyType(dict(thresholds or {}))
         self.name = name
         self.guidance = guidance
+        self.entity_binding: Mapping[str, Any] = MappingProxyType(dict(entity_binding or {}))
 
     @property
     def thresholds(self) -> Mapping[str, float]:
@@ -245,6 +295,34 @@ class PolicyEngine:
 
     def add_rule(self, rule_fn: PolicyRuleFn) -> None:
         self._rules.append(rule_fn)
+
+    def extract_entities(self, text: str) -> set[str]:
+        """Extract recognized entity identifiers from text, canonicalized."""
+        if not text:
+            return set()
+        found: set[str] = set()
+        # 1. Manifest-configured patterns and aliases if available
+        patterns = self.entity_binding.get("patterns") or []
+        prefix = str(self.entity_binding.get("prefix") or "")
+        for pat in patterns:
+            try:
+                for m in re.finditer(pat, text):
+                    val = m.group(1) if m.lastindex else m.group(0)
+                    canon = _canonicalize_entity(val)
+                    if prefix and not canon.startswith(prefix):
+                        canon = f"{prefix}{canon}"
+                    found.add(canon)
+            except Exception:
+                pass
+        for alias in self.entity_binding.get("aliases") or []:
+            if re.search(rf"\b{re.escape(str(alias))}\b", text, re.IGNORECASE):
+                found.add(_canonicalize_entity(str(alias)))
+
+        # 2. Multi-domain default patterns
+        for regex, transform in _DEFAULT_ENTITY_PATTERNS:
+            for m in regex.finditer(text):
+                found.add(transform(m))
+        return found
 
     def evaluate(self, proposal: ProposedDecision, context: DecisionContext | None = None) -> PolicyEvaluation:
         ctx = context or DecisionContext(subject_or_entity=proposal.intent)
@@ -276,36 +354,45 @@ class PolicyEngine:
                 )
             )
 
-        # Built-in check 3: Target entity binding (P0-2).
+        # Built-in check 3: Target entity binding (P0-2 / AR-01).
         # A decision is evaluated only when its target matches an entity identified in the user's request.
-        # On a mismatch or an ambiguous request, the result is REQUIRES_APPROVAL.
-        if ctx.subject_or_entity:
-            from .facts import proposal_target
-            target = proposal_target(
-                proposal.parameters,
-                "account_id", "account", "experiment_id", "experiment",
-                "service_name", "service", "document_id", "invoice_id", "artifact_id",
-            )
-            if target is not None:
-                norm_target = _canonicalize_entity(target)
-                norm_subject = ctx.subject_or_entity.strip().casefold()
-                matches = _ENTITY_EXTRACT_RE.findall(norm_subject)
-                found_entities = {_canonicalize_entity(m) for m in matches}
-                if found_entities:
-                    if norm_target not in found_entities:
-                        results.append(
-                            PolicyRuleResult.requires_approval(
-                                "target_entity_binding",
-                                f"Proposed target '{target}' does not match entity in user request ({sorted(found_entities)}): '{ctx.subject_or_entity}'.",
-                            )
+        # If the proposal names a target and that target cannot be matched to an entity identified
+        # in the user's request (including when no entity is recognised at all, or on ambiguous requests),
+        # the result is REQUIRES_APPROVAL. Fail closed.
+        from .facts import proposal_target
+        target = proposal_target(
+            proposal.parameters,
+            "account_id", "account", "experiment_id", "experiment",
+            "service_name", "service", "document_id", "invoice_id", "artifact_id", "incident_id",
+        )
+        if target is not None:
+            norm_target = _canonicalize_entity(target)
+            found_entities = self.extract_entities(ctx.subject_or_entity or "")
+            if not found_entities:
+                results.append(
+                    PolicyRuleResult.requires_approval(
+                        "target_entity_binding",
+                        f"Proposed target '{target}' cannot be matched to any entity identified in user request: '{ctx.subject_or_entity or ''}'.",
+                    )
+                )
+            elif norm_target not in found_entities:
+                results.append(
+                    PolicyRuleResult.requires_approval(
+                        "target_entity_binding",
+                        f"Proposed target '{target}' does not match entity in user request ({sorted(found_entities)}): '{ctx.subject_or_entity}'.",
+                    )
+                )
+            else:
+                # Check for ambiguity: multiple candidate entities of the same type in the user request
+                type_prefix = norm_target.split("-")[0] + "-"
+                same_type = [e for e in found_entities if e.startswith(type_prefix)]
+                if len(same_type) > 1:
+                    results.append(
+                        PolicyRuleResult.requires_approval(
+                            "target_entity_binding",
+                            f"User request is ambiguous across multiple entities ({sorted(same_type)}); human approval required.",
                         )
-                    elif len(found_entities) > 1:
-                        results.append(
-                            PolicyRuleResult.requires_approval(
-                                "target_entity_binding",
-                                f"User request is ambiguous across multiple entities ({sorted(found_entities)}); human approval required.",
-                            )
-                        )
+                    )
 
         for rule_fn in self._rules:
             try:

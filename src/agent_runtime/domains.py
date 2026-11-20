@@ -33,10 +33,11 @@ WHY THIS EXISTS (the structural bugs it replaces)
 
 import importlib.util
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 from types import MappingProxyType, ModuleType
+from typing import Any
 
 import yaml
 
@@ -69,6 +70,7 @@ class DomainSpec:
     # Prompt text telling the model this domain's action names, parameter
     # keys and the evidence its rules read (see PolicyEngine.guidance).
     decision_guide: str = ""
+    entity_binding: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     @property
     def server_script(self) -> Path:
@@ -87,6 +89,7 @@ class DomainSpec:
         """A fresh engine enforcing this domain's rules and thresholds."""
         engine = _policy_module(self.name, self.root / "policies.py").create_policy_engine(self.thresholds)
         engine.guidance = self.decision_guide
+        engine.entity_binding = self.entity_binding
         documented = {rule.name for rule in self.policy_rules}
         implemented = set(engine.rule_names)
         if documented != implemented:
@@ -177,6 +180,10 @@ def load_domain(name: str) -> DomainSpec:
     if not isinstance(decision_guide, str):
         raise DomainConfigError(f"{manifest_path}: 'decision_guide' must be a string.")
 
+    raw_entity_binding = manifest.get("entity_binding") or {}
+    if not isinstance(raw_entity_binding, Mapping):
+        raise DomainConfigError(f"{manifest_path}: 'entity_binding' must be a mapping.")
+
     return DomainSpec(
         name=name,
         title=_require_text(manifest, "title", manifest_path),
@@ -185,4 +192,5 @@ def load_domain(name: str) -> DomainSpec:
         thresholds=MappingProxyType(thresholds),
         policy_rules=tuple(rules),
         decision_guide=decision_guide.strip(),
+        entity_binding=MappingProxyType(dict(raw_entity_binding)),
     )

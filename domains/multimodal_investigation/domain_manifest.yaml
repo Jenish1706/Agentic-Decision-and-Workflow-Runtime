@@ -21,6 +21,13 @@ decision_guide: |
 thresholds:
   max_autonomous_expense: 1000  # dollars
 
+entity_binding:
+  target_param: document_id
+  patterns:
+    - '(?i)\b(?:(?:invoice|inv)[_\s-]*(?:number|num|no)?[_\s#-]*(?:inv[_\s-]*)?([a-z0-9]+(?:[-_][a-z0-9]+)+|\d+)|inv[_\s-]([a-z0-9_-]+))\b'
+    - '(?i)\b(latency_sla_[a-z0-9_]+)\b'
+  prefix: "inv-"
+
 policy_rules:
   - name: invoice_math_reconciliation
     on_violation: BLOCKED

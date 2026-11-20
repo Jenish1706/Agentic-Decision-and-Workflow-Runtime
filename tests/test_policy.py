@@ -164,3 +164,45 @@ def test_target_entity_binding_rejects_multi_entity_prompt_injection():
     assert "target_entity_binding" in [r.rule_name for r in evaluation.rule_results]
 
 
+@pytest.mark.parametrize(
+    ("query", "parameters"),
+    [
+        ("approve ACCT-105", {"account_id": "ACCT-101"}),
+        ("roll out experiment EXP 204", {"experiment_id": "EXP-209"}),
+        ("approve account number 105", {"account_id": "ACCT-101"}),
+        ("raise the limit for customer 105", {"account_id": "ACCT-101"}),
+        ("approve the applicant on account #105", {"account_id": "ACCT-101"}),
+        ("restart checkout-service", {"service_name": "payments-service"}),
+        ("approve the loan", {"account_id": "ACCT-101"}),
+    ],
+)
+def test_target_entity_binding_section_0_2_probes_require_approval(query, parameters):
+    proposal = _proposal(parameters=parameters)
+    ctx = DecisionContext(subject_or_entity=query)
+    evaluation = PolicyEngine([_allowed]).evaluate(proposal, ctx)
+    assert evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "target_entity_binding" in [r.rule_name for r in evaluation.rule_results]
+
+
+@pytest.mark.parametrize(
+    ("query", "parameters"),
+    [
+        ("Should we approve ACCT-101 for an increase?", {"account_id": "ACCT-101"}),
+        ("approve account number 101", {"account_id": "ACCT-101"}),
+        ("raise the limit for customer 101", {"account_id": "ACCT-101"}),
+        ("approve the applicant on account #101", {"account_id": "ACCT-101"}),
+        ("roll out experiment EXP 204 to 25%", {"experiment_id": "EXP-204"}),
+        ("restart checkout-service", {"service_name": "checkout-service"}),
+        ("Audit invoice INV-2026-004 for payment.", {"document_id": "INV-2026-004"}),
+        ("Can we scale recommendation-worker for INC-903 with a 10% blast radius?", {"incident_id": "INC-903"}),
+    ],
+)
+def test_target_entity_binding_matching_targets_all_domains_allowed(query, parameters):
+    proposal = _proposal(parameters=parameters)
+    ctx = DecisionContext(subject_or_entity=query)
+    evaluation = PolicyEngine([_allowed]).evaluate(proposal, ctx)
+    assert evaluation.final_status == PolicyStatus.ALLOWED
+    assert "target_entity_binding" not in [r.rule_name for r in evaluation.rule_results]
+
+
+
