@@ -205,4 +205,36 @@ def test_target_entity_binding_matching_targets_all_domains_allowed(query, param
     assert "target_entity_binding" not in [r.rule_name for r in evaluation.rule_results]
 
 
+@pytest.mark.parametrize(
+    ("query", "parameters"),
+    [
+        ("pay invoice INV-2024-001", {"document_path": "invoices/INV-2024-002.json"}),
+        ("apply the SLA penalty for latency_sla_q3", {"image_path": "charts/latency_sla_q4.png"}),
+        ("approve ACCT-105", {"customer_id": "ACCT-101"}),
+    ],
+)
+def test_target_entity_binding_section_0_3_probes_require_approval(query, parameters):
+    proposal = _proposal(parameters=parameters)
+    ctx = DecisionContext(subject_or_entity=query)
+    evaluation = PolicyEngine([_allowed]).evaluate(proposal, ctx)
+    assert evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert "target_entity_binding" in [r.rule_name for r in evaluation.rule_results]
+
+
+@pytest.mark.parametrize(
+    ("query", "parameters"),
+    [
+        ("pay invoice INV-2024-001", {"document_path": "invoices/INV-2024-001.json"}),
+        ("apply the SLA penalty for latency_sla_q3", {"image_path": "charts/latency_sla_q3.png"}),
+        ("approve ACCT-105", {"customer_id": "ACCT-105"}),
+    ],
+)
+def test_target_entity_binding_section_0_3_probes_matching_allowed(query, parameters):
+    proposal = _proposal(parameters=parameters)
+    ctx = DecisionContext(subject_or_entity=query)
+    evaluation = PolicyEngine([_allowed]).evaluate(proposal, ctx)
+    assert evaluation.final_status == PolicyStatus.ALLOWED
+    assert "target_entity_binding" not in [r.rule_name for r in evaluation.rule_results]
+
+
 

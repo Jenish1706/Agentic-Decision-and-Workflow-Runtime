@@ -185,6 +185,13 @@ def load_domain(name: str) -> DomainSpec:
     raw_entity_binding = manifest.get("entity_binding") or {}
     if not isinstance(raw_entity_binding, Mapping):
         raise DomainConfigError(f"{manifest_path}: 'entity_binding' must be a mapping.")
+    entity_binding_dict = dict(raw_entity_binding)
+    if "target_params" in entity_binding_dict:
+        if not isinstance(entity_binding_dict["target_params"], (list, tuple)):
+            raise DomainConfigError(f"{manifest_path}: 'target_params' must be a list of parameter names.")
+        entity_binding_dict["target_params"] = tuple(str(k) for k in entity_binding_dict["target_params"])
+    elif "target_param" in entity_binding_dict:
+        entity_binding_dict["target_params"] = (str(entity_binding_dict["target_param"]),)
 
     raw_permit_tools = manifest.get("permit_tools") or []
     if not isinstance(raw_permit_tools, (list, tuple)):
@@ -198,6 +205,6 @@ def load_domain(name: str) -> DomainSpec:
         thresholds=MappingProxyType(thresholds),
         policy_rules=tuple(rules),
         decision_guide=decision_guide.strip(),
-        entity_binding=MappingProxyType(dict(raw_entity_binding)),
+        entity_binding=MappingProxyType(entity_binding_dict),
         permit_tools=tuple(str(t) for t in raw_permit_tools),
     )

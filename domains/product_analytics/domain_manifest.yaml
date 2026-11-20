@@ -20,7 +20,9 @@ thresholds:
   max_autonomous_traffic_pct: 50
 
 entity_binding:
-  target_param: experiment_id
+  target_params:
+    - experiment_id
+    - experiment
   patterns:
     - '(?i)\b(?:(?:experiment|exp)[_\s-]*(?:number|num|no)?[_\s#-]*(\d+)|exp[_\s-]?(\d+))\b'
   prefix: "exp-"

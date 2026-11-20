@@ -108,7 +108,7 @@ _DEFAULT_ENTITY_PATTERNS = [
     # Artifacts
     (
         re.compile(r"(?i)\b(latency_sla_[a-z0-9_]+)\b"),
-        lambda m: m.group(1).casefold(),
+        lambda m: _canonicalize_entity(m.group(1)),
     ),
 ]
 
@@ -312,7 +312,8 @@ class PolicyEngine:
                     val = m.group(1) if m.lastindex else m.group(0)
                     canon = _canonicalize_entity(val)
                     if prefix and not canon.startswith(prefix):
-                        canon = f"{prefix}{canon}"
+                        if not canon.startswith(("latency-sla-", "inc-", "exp-", "acct-")):
+                            canon = f"{prefix}{canon}"
                     found.add(canon)
             except Exception:
                 pass
@@ -325,6 +326,28 @@ class PolicyEngine:
             for m in regex.finditer(text):
                 found.add(transform(m))
         return found
+
+    def get_target_params(self) -> tuple[str, ...]:
+        """Candidate parameter keys that identify the target entity."""
+        manifest_params = self.entity_binding.get("target_params")
+        if manifest_params:
+            return tuple(manifest_params)
+        single = self.entity_binding.get("target_param")
+        if single:
+            return (str(single),)
+        return (
+            "account_id", "account", "customer_id", "customer", "applicant_id",
+            "experiment_id", "experiment",
+            "service_name", "service",
+            "document_id", "document_path", "invoice_id",
+            "artifact_id", "artifact_name", "chart_id", "image_path",
+            "incident_id", "incident",
+        )
+
+    def extract_proposal_target(self, parameters: Mapping[str, Any]) -> str | None:
+        """Extract and normalise target entity from proposal parameters using target_params."""
+        from .facts import proposal_target
+        return proposal_target(parameters, *self.get_target_params())
 
     def evaluate(self, proposal: ProposedDecision, context: DecisionContext | None = None) -> PolicyEvaluation:
         ctx = context or DecisionContext(subject_or_entity=proposal.intent)
@@ -356,20 +379,17 @@ class PolicyEngine:
                 )
             )
 
-        # Built-in check 3: Target entity binding (P0-2 / AR-01).
+        # Built-in check 3: Target entity binding (P0-2 / AR-01 / AR-10).
         # A decision is evaluated only when its target matches an entity identified in the user's request.
         # If the proposal names a target and that target cannot be matched to an entity identified
         # in the user's request (including when no entity is recognised at all, or on ambiguous requests),
         # the result is REQUIRES_APPROVAL. Fail closed.
-        from .facts import proposal_target
-        target = proposal_target(
-            proposal.parameters,
-            "account_id", "account", "experiment_id", "experiment",
-            "service_name", "service", "document_id", "invoice_id", "artifact_id", "incident_id",
-        )
+        from .facts import normalize_target_value
+        target = self.extract_proposal_target(proposal.parameters)
+        found_entities = self.extract_entities(ctx.subject_or_entity or "")
+        target_rule_added = False
         if target is not None:
             norm_target = _canonicalize_entity(target)
-            found_entities = self.extract_entities(ctx.subject_or_entity or "")
             if not found_entities:
                 results.append(
                     PolicyRuleResult.requires_approval(
@@ -377,6 +397,7 @@ class PolicyEngine:
                         f"Proposed target '{target}' cannot be matched to any entity identified in user request: '{ctx.subject_or_entity or ''}'.",
                     )
                 )
+                target_rule_added = True
             elif norm_target not in found_entities:
                 results.append(
                     PolicyRuleResult.requires_approval(
@@ -384,6 +405,7 @@ class PolicyEngine:
                         f"Proposed target '{target}' does not match entity in user request ({sorted(found_entities)}): '{ctx.subject_or_entity}'.",
                     )
                 )
+                target_rule_added = True
             else:
                 # Check for ambiguity: multiple candidate entities of the same type in the user request
                 type_prefix = norm_target.split("-")[0] + "-"
@@ -395,6 +417,33 @@ class PolicyEngine:
                             f"User request is ambiguous across multiple entities ({sorted(same_type)}); human approval required.",
                         )
                     )
+                    target_rule_added = True
+
+        # Also fail closed when *any* parameter value matches a domain entity pattern but differs from the requested entity
+        if not target_rule_added:
+            for param_key, param_val in proposal.parameters.items():
+                if isinstance(param_val, (str, int)):
+                    norm_val = normalize_target_value(param_val)
+                    matched = self.extract_entities(norm_val)
+                    if not matched:
+                        continue
+                    if not found_entities:
+                        results.append(
+                            PolicyRuleResult.requires_approval(
+                                "target_entity_binding",
+                                f"Parameter '{param_key}' specifies entity '{sorted(matched)[0]}' but no entity was identified in user request: '{ctx.subject_or_entity or ''}'.",
+                            )
+                        )
+                        break
+                    differing = [ent for ent in matched if ent not in found_entities]
+                    if differing:
+                        results.append(
+                            PolicyRuleResult.requires_approval(
+                                "target_entity_binding",
+                                f"Parameter '{param_key}' specifies entity '{differing[0]}' that does not match user request ({sorted(found_entities)}): '{ctx.subject_or_entity}'.",
+                            )
+                        )
+                        break
 
         for rule_fn in self._rules:
             try:

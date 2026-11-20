@@ -65,10 +65,7 @@ _HALF_CENT = 0.005
 
 
 def _target_document(proposal: ProposedDecision) -> str | None:
-    reference = proposal_target(proposal.parameters, "document_id", "invoice_id", "document_path")
-    if reference is None:
-        return None
-    return reference[:-5] if reference.casefold().endswith(".json") else reference
+    return proposal_target(proposal.parameters, "document_id", "document_path", "invoice_id")
 
 
 def _target_artifact(proposal: ProposedDecision, ctx: DecisionContext) -> str | None:
@@ -77,7 +74,7 @@ def _target_artifact(proposal: ProposedDecision, ctx: DecisionContext) -> str | 
     reference = proposal_target(proposal.parameters, "artifact_id", "chart_id", "artifact_name", "image_path")
     if reference is None:
         return None
-    key = normalize_identifier(reference[:-5] if reference.casefold().endswith(".json") else reference)
+    key = normalize_identifier(reference)
     for _, _, mapping in iter_scoped_mappings(ctx.evidence_ledger, None):
         artifact_id = mapping.get("artifact_id")
         if artifact_id is not None and key in {

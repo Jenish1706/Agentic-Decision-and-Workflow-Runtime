@@ -180,6 +180,21 @@ async def test_payment_without_extraction_is_not_allowed():
     assert state.policy_evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
 
 
+@pytest.mark.asyncio
+async def test_target_binding_catches_document_path_swap_with_multiple_invoices_extracted():
+    # User asks to pay INV-2026-001, but the proposal specifies document_path="invoices/inv-2026-004.json".
+    # Even though both invoices are in evidence, target entity binding must require approval.
+    runtime = _runtime([
+        _call("extract_document_metrics", document_path="inv-2026-001.json"),
+        _call("extract_document_metrics", document_path="inv-2026-004.json"),
+        _decide("Pay INV-2026-004.", "approve_payment", document_path="invoices/inv-2026-004.json"),
+    ])
+    state = await runtime.run("Pay INV-2026-001?")
+
+    assert state.policy_evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
+    assert any(r.rule_name == "target_entity_binding" for r in state.policy_evaluation.rule_results)
+
+
 # ---------------------------------------------------------------- server
 
 

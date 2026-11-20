@@ -295,17 +295,38 @@ def find_entity_records(
     return records
 
 
-def proposal_target(parameters: Mapping[str, Any], *keys: str) -> str | None:
+def normalize_target_value(value: Any) -> str:
+    """Normalise path-like values by stripping directory prefixes and file extensions."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    # Strip directory path (forward or backward slashes)
+    s = s.replace("\\", "/").rstrip("/").split("/")[-1]
+    # Strip file extension if present (e.g. .json, .png, .csv)
+    if "." in s:
+        s = s.rsplit(".", 1)[0]
+    return s.strip()
+
+
+def proposal_target(
+    parameters: Mapping[str, Any],
+    *keys: str,
+    target_params: tuple[str, ...] | list[str] | None = None,
+) -> str | None:
     """The entity a proposal acts on, taken from its parameters.
 
     One of the two things rules legitimately read from the LLM's proposal:
     *which* account / invoice / service it wants to act on. Facts about that
     entity still come from evidence via `resolve_fact`.
+    Normalises path-like values (strips directory and extension).
     """
-    for key in keys:
+    search_keys = keys if keys else (target_params or ())
+    for key in search_keys:
         value = parameters.get(key)
         if value is not None and str(value).strip():
-            return str(value).strip()
+            norm = normalize_target_value(value)
+            if norm:
+                return norm
     return None
 
 

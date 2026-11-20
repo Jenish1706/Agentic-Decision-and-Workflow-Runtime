@@ -22,7 +22,14 @@ thresholds:
   max_autonomous_expense: 1000  # dollars
 
 entity_binding:
-  target_param: document_id
+  target_params:
+    - document_id
+    - document_path
+    - invoice_id
+    - artifact_id
+    - artifact_name
+    - chart_id
+    - image_path
   patterns:
     - '(?i)\b(?:(?:invoice|inv)[_\s-]*(?:number|num|no)?[_\s#-]*(?:inv[_\s-]*)?([a-z0-9]+(?:[-_][a-z0-9]+)+|\d+)|inv[_\s-]([a-z0-9_-]+))\b'
     - '(?i)\b(latency_sla_[a-z0-9_]+)\b'
