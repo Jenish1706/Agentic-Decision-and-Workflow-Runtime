@@ -87,7 +87,7 @@ questions, so each question's prompts contained earlier questions and
 answers - for the single agent at every step, for the multi-agent path only
 inside its Researcher worker. The numerical verifier used at the time also
 accepted about half of randomly fabricated numbers (50.9% of 2,000 in a later
-measurement; the current verifier accepts 4.0%). The findings are kept in
+measurement; the current verifier accepts 3.9%). The findings are kept in
 [EVALUATION.md](EVALUATION.md) as hypotheses to re-measure, not as results;
 re-run them with the commands below before quoting any of them.
 
@@ -96,11 +96,17 @@ re-run them with the commands below before quoting any of them.
 <!-- BEGIN_VERIFIER_TABLE -->
 | Verifier Check | Baseline (b13a25d) | Current (Deterministic) |
 |---|---|---|
-| Random fabricated claims accepted (2,000 trials) | 1,018 (50.9%) | 79 (4.0%) |
+| Random fabricated claims accepted (2,000 trials) | 1,018 (50.9%) | 78 (3.9%) |
 | Out-of-range claims accepted (2,000 trials) | 67 (3.4%) | 0 (0.0%) |
-| Entity swaps accepted (3 trials) | 3 (100.0%) | 0 (0.0%) |
+| Plausible-range percentages (1.4-4.3%, 2,000 trials) | 2,000 (100.0%) | 164 (8.2%) |
+| Percentage-point gaps (0.1-3.0 pp, 2,000 trials) | 2,000 (100.0%) | 610 (30.5%) |
+| Relative changes (1-60%, 2,000 trials) | 2,000 (100.0%) | 1,128 (56.4%) |
+| Entity swaps accepted (6 trials) | 6 (100.0%) | 0 (0.0%) |
+| Synonym swaps accepted (6 trials) | 6 (100.0%) | 0 (0.0%) |
+| Metric swaps accepted (6 trials) | 5 (83.3%) | 0 (0.0%) |
 | Direction reversal ("fell" for +1.33 pp) | accepted | rejected |
 | Version number in factual sentence ("iOS 17") | accepted | accepted |
+| Correct answers accepted (3 benchmark cases) | 3/3 (100.0%) | 3/3 (100.0%) |
 <!-- END_VERIFIER_TABLE -->
 
 <!-- BEGIN_CITATION_TABLE -->

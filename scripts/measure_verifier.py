@@ -93,11 +93,64 @@ def out_of_range_claims() -> list[str]:
 
 
 def swap_claims() -> list[str]:
-    """Entity swaps: claiming desktop's ~4.1% conversion rate for mobile."""
+    """Entity swaps: claiming desktop's conversion rates for mobile or vice versa."""
     return [
         "Mobile conversion was 4.1%.",
         "Mobile conversion rate was 4.0%.",
         "Mobile conversion was 4.2%.",
+        "Desktop users converted at just 1.6% last week.",
+        "Desktop conversion dropped to 1.6%.",
+        "On desktop, conversion was 2.8% last week.",
+    ]
+
+
+def synonym_swap_claims() -> list[str]:
+    """Synonym swaps: using domain synonyms (phone/workstation/laptop) for opposing entities."""
+    return [
+        "The phone checkout converted at 4.1%.",
+        "Phone conversion rate was 4.0%.",
+        "Smartphone checkout converted at 4.1%.",
+        "Workstation users converted at 1.6% last week.",
+        "PC conversion was 1.6% last week.",
+        "Laptop conversion rate was 1.6%.",
+    ]
+
+
+def metric_swap_claims() -> list[str]:
+    """Metric swaps: attributing numbers to opposing funnel steps or incompatible metrics."""
+    return [
+        "Mobile purchases completed totalled 2,700 on one day.",
+        "There were 2,650 completed purchases on mobile.",
+        "Mobile checkouts started reached 43.",
+        "Desktop completed purchases totalled 1,300.",
+        "Credit score was 28%.",
+        "DTI ratio reached 740.",
+    ]
+
+
+def plausible_percentage_claims() -> list[str]:
+    """Percentages in the realistic 1.4-4.3% range observed in the ledger."""
+    rng = random.Random(13)
+    return [f"Mobile conversion was {rng.uniform(1.4, 4.3):.1f}%." for _ in range(TRIALS)]
+
+
+def percentage_point_gap_claims() -> list[str]:
+    """Percentage point gaps in the realistic 0.1-3.0 pp range."""
+    rng = random.Random(17)
+    return [f"The gap widened by {rng.uniform(0.1, 3.0):.1f} percentage points." for _ in range(TRIALS)]
+
+
+def relative_change_claims() -> list[str]:
+    """Whole-number relative falls in 1-60% range."""
+    rng = random.Random(19)
+    return [f"Conversion fell {rng.randint(1, 60)}%." for _ in range(TRIALS)]
+
+
+def correct_answers() -> list[str]:
+    return [
+        "Mobile conversion dropped from 2.8% to 1.6% last week.",
+        "Variant B converted at 2.9% vs 1.6% for A, a 1.33 pp improvement (p = 0.014).",
+        "Mobile checkouts started totalled 2,700 on one day.",
     ]
 
 
@@ -110,7 +163,13 @@ def measure() -> dict:
 
     r_claims = random_claims()
     oor_claims = out_of_range_claims()
+    plaus_claims = plausible_percentage_claims()
+    gap_claims = percentage_point_gap_claims()
+    rel_claims = relative_change_claims()
     s_claims = swap_claims()
+    syn_claims = synonym_swap_claims()
+    met_claims = metric_swap_claims()
+    cor_answers = correct_answers()
 
     base_r = count_accepted(baseline, r_claims)
     curr_r = count_accepted(current, r_claims)
@@ -118,8 +177,23 @@ def measure() -> dict:
     base_oor = count_accepted(baseline, oor_claims)
     curr_oor = count_accepted(current, oor_claims)
 
+    base_plaus = count_accepted(baseline, plaus_claims)
+    curr_plaus = count_accepted(current, plaus_claims)
+
+    base_gap = count_accepted(baseline, gap_claims)
+    curr_gap = count_accepted(current, gap_claims)
+
+    base_rel = count_accepted(baseline, rel_claims)
+    curr_rel = count_accepted(current, rel_claims)
+
     base_s = count_accepted(baseline, s_claims)
     curr_s = count_accepted(current, s_claims)
+
+    base_syn = count_accepted(baseline, syn_claims)
+    curr_syn = count_accepted(current, syn_claims)
+
+    base_met = count_accepted(baseline, met_claims)
+    curr_met = count_accepted(current, met_claims)
 
     reversal = "Variant B fell by 1.33 percentage points."  # evidence: +1.333 pp
     base_rev = baseline.verify_numerical_grounding(reversal, ledger).valid
@@ -129,12 +203,8 @@ def measure() -> dict:
     base_ver = baseline.verify_numerical_grounding(version_non_claim, ledger).valid
     curr_ver = current.verify_numerical_grounding(version_non_claim, ledger).valid
 
-    correct = [
-        "Mobile conversion dropped from 2.8% to 1.6% last week.",
-        "Variant B converted at 2.9% vs 1.6% for A, a 1.33 pp improvement (p = 0.014).",
-        "Mobile checkouts started totalled 2,700 on one day.",
-    ]
-    curr_correct = sum(current.verify_numerical_grounding(answer, ledger).valid for answer in correct)
+    base_correct = count_accepted(baseline, cor_answers)
+    curr_correct = count_accepted(current, cor_answers)
 
     return {
         "trials": TRIALS,
@@ -150,12 +220,54 @@ def measure() -> dict:
             "current_count": curr_oor,
             "current_pct": curr_oor / len(oor_claims),
         },
-        "swaps": {
+        "plausible_pct": {
+            "trials": len(plaus_claims),
+            "baseline_count": base_plaus,
+            "baseline_pct": base_plaus / len(plaus_claims),
+            "current_count": curr_plaus,
+            "current_pct": curr_plaus / len(plaus_claims),
+        },
+        "pp_gaps": {
+            "trials": len(gap_claims),
+            "baseline_count": base_gap,
+            "baseline_pct": base_gap / len(gap_claims),
+            "current_count": curr_gap,
+            "current_pct": curr_gap / len(gap_claims),
+        },
+        "relative_changes": {
+            "trials": len(rel_claims),
+            "baseline_count": base_rel,
+            "baseline_pct": base_rel / len(rel_claims),
+            "current_count": curr_rel,
+            "current_pct": curr_rel / len(rel_claims),
+        },
+        "entity_swaps": {
             "trials": len(s_claims),
             "baseline_count": base_s,
             "baseline_pct": base_s / len(s_claims),
             "current_count": curr_s,
             "current_pct": curr_s / len(s_claims),
+        },
+        "swaps": {  # backward compatibility alias
+            "trials": len(s_claims),
+            "baseline_count": base_s,
+            "baseline_pct": base_s / len(s_claims),
+            "current_count": curr_s,
+            "current_pct": curr_s / len(s_claims),
+        },
+        "synonym_swaps": {
+            "trials": len(syn_claims),
+            "baseline_count": base_syn,
+            "baseline_pct": base_syn / len(syn_claims),
+            "current_count": curr_syn,
+            "current_pct": curr_syn / len(syn_claims),
+        },
+        "metric_swaps": {
+            "trials": len(met_claims),
+            "baseline_count": base_met,
+            "baseline_pct": base_met / len(met_claims),
+            "current_count": curr_met,
+            "current_pct": curr_met / len(met_claims),
         },
         "reversal": {
             "baseline": "accepted" if base_rev else "rejected",
@@ -166,8 +278,11 @@ def measure() -> dict:
             "current": "accepted" if curr_ver else "rejected",
         },
         "correct": {
-            "total": len(correct),
+            "total": len(cor_answers),
+            "baseline_count": base_correct,
+            "baseline_pct": base_correct / len(cor_answers),
             "current_count": curr_correct,
+            "current_pct": curr_correct / len(cor_answers),
         },
     }
 
@@ -176,7 +291,12 @@ def main() -> None:
     results = measure()
     r = results["random"]
     oor = results["out_of_range"]
-    s = results["swaps"]
+    plaus = results["plausible_pct"]
+    gaps = results["pp_gaps"]
+    rels = results["relative_changes"]
+    es = results["entity_swaps"]
+    syn = results["synonym_swaps"]
+    met = results["metric_swaps"]
     rev = results["reversal"]
     ver = results["version"]
     cor = results["correct"]
@@ -185,8 +305,18 @@ def main() -> None:
           f"   current {r['current_count']}/{results['trials']} ({r['current_pct']:.1%})")
     print(f"Out-of-range claims accepted:       baseline {oor['baseline_count']}/{results['trials']} ({oor['baseline_pct']:.1%})"
           f"   current {oor['current_count']}/{results['trials']} ({oor['current_pct']:.1%})")
-    print(f"Entity swaps accepted:              baseline {s['baseline_count']}/{s['trials']} ({s['baseline_pct']:.1%})"
-          f"   current {s['current_count']}/{s['trials']} ({s['current_pct']:.1%})")
+    print(f"Plausible-range percentages:        baseline {plaus['baseline_count']}/{plaus['trials']} ({plaus['baseline_pct']:.1%})"
+          f"   current {plaus['current_count']}/{plaus['trials']} ({plaus['current_pct']:.1%})")
+    print(f"Percentage-point gaps:              baseline {gaps['baseline_count']}/{gaps['trials']} ({gaps['baseline_pct']:.1%})"
+          f"   current {gaps['current_count']}/{gaps['trials']} ({gaps['current_pct']:.1%})")
+    print(f"Relative changes (falls 1-60%):     baseline {rels['baseline_count']}/{rels['trials']} ({rels['baseline_pct']:.1%})"
+          f"   current {rels['current_count']}/{rels['trials']} ({rels['current_pct']:.1%})")
+    print(f"Entity swaps accepted:              baseline {es['baseline_count']}/{es['trials']} ({es['baseline_pct']:.1%})"
+          f"   current {es['current_count']}/{es['trials']} ({es['current_pct']:.1%})")
+    print(f"Synonym swaps accepted:             baseline {syn['baseline_count']}/{syn['trials']} ({syn['baseline_pct']:.1%})"
+          f"   current {syn['current_count']}/{syn['trials']} ({syn['current_pct']:.1%})")
+    print(f"Metric swaps accepted:              baseline {met['baseline_count']}/{met['trials']} ({met['baseline_pct']:.1%})"
+          f"   current {met['current_count']}/{met['trials']} ({met['current_pct']:.1%})")
 
     print(f"Direction reversal accepted:        baseline {rev['baseline'] == 'accepted'}"
           f"   current {rev['current'] == 'accepted'}")
@@ -194,7 +324,8 @@ def main() -> None:
     print(f"Version number accepted as valid:   baseline {ver['baseline'] == 'accepted'}"
           f"   current {ver['current'] == 'accepted'}")
 
-    print(f"Correct answers accepted (current): {cor['current_count']}/{cor['total']}")
+    print(f"Correct answers accepted:           baseline {cor['baseline_count']}/{cor['total']} ({cor['baseline_pct']:.1%})"
+          f"   current {cor['current_count']}/{cor['total']} ({cor['current_pct']:.1%})")
     sys.exit(0 if cor['current_count'] == cor['total'] else 1)
 
 

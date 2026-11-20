@@ -269,12 +269,17 @@ difference of +1.333 pp, a p-value). The baseline is the verifier at commit
 <!-- BEGIN_VERIFIER_TABLE -->
 | | Baseline (b13a25d) | Current |
 |---|---|---|
-| Random fabricated claims accepted (2,000; percentages 0.5-60%, gaps 0.2-15 pp, "fell" 1-90%) | 1,018 (50.9%) | 79 (4.0%) |
+| Random fabricated claims accepted (2,000; percentages 0.5-60%, gaps 0.2-15 pp, "fell" 1-90%) | 1,018 (50.9%) | 78 (3.9%) |
 | Out-of-range claims accepted (2,000; 45-95%, 5-40 pp, counts 3,000-99,000 - no real value or absolute difference in range) | 67 (3.4%) | 0 (0.0%) |
-| Entity swaps accepted (claiming desktop rate for mobile) | 3 (100.0%) | 0 (0.0%) |
+| Plausible-range percentages (2,000; 1.4-4.3% range) | 2,000 (100.0%) | 164 (8.2%) |
+| Percentage-point gaps (2,000; 0.1-3.0 pp range) | 2,000 (100.0%) | 610 (30.5%) |
+| Relative changes (2,000; whole-number falls 1-60%) | 2,000 (100.0%) | 1,128 (56.4%) |
+| Entity swaps accepted (6 trials, phrased multiple ways) | 6 (100.0%) | 0 (0.0%) |
+| Synonym swaps accepted (6 trials, phone/workstation/laptop) | 6 (100.0%) | 0 (0.0%) |
+| Metric swaps accepted (6 trials, checkout vs purchase / DTI vs score) | 5 (83.3%) | 0 (0.0%) |
 | "Variant B fell by 1.33 percentage points" (evidence: +1.333) | accepted | rejected |
 | Version number accepted as valid ("...iOS 17 update") | accepted | accepted |
-| Three correct answers | - | all accepted |
+| Benchmark correct answers (3 trials, false rejection control) | 3/3 (100.0%) | 3/3 (100.0%) |
 <!-- END_VERIFIER_TABLE -->
 
 The random set's residual 4.0% is mostly values that coincide with real ones

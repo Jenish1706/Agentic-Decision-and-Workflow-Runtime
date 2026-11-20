@@ -235,6 +235,7 @@ class QuantitativeClaim:
     explanation: str = ""
     sentence: str = ""
     context_words: frozenset[str] = field(default_factory=frozenset)
+    clause_words: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True)
@@ -243,6 +244,56 @@ class NumericalVerificationResult:
     claims: list[QuantitativeClaim] = field(default_factory=list)
     unverified_claims: list[QuantitativeClaim] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
+
+
+_DOMAIN_SYNONYMS: dict[str, str] = {
+    # Devices
+    "phone": "mobile",
+    "phones": "mobile",
+    "smartphone": "mobile",
+    "smartphones": "mobile",
+    "cellphone": "mobile",
+    "cellular": "mobile",
+    "ios": "mobile",
+    "android": "mobile",
+    "workstation": "desktop",
+    "workstations": "desktop",
+    "pc": "desktop",
+    "pcs": "desktop",
+    "laptop": "desktop",
+    "laptops": "desktop",
+    "computer": "desktop",
+    "computers": "desktop",
+    "mac": "desktop",
+    "windows": "desktop",
+}
+
+_METRIC_OPPOSITIONS = (
+    {
+        "names": ("checkouts_started", "checkout"),
+        "keywords": frozenset({"checkout", "checkouts", "started"}),
+        "opposing": ("purchases_completed", "purchase"),
+        "opposing_keywords": frozenset({"purchase", "purchases", "completed", "orders", "order"}),
+    },
+    {
+        "names": ("purchases_completed", "purchase"),
+        "keywords": frozenset({"purchase", "purchases", "completed", "orders", "order"}),
+        "opposing": ("checkouts_started", "checkout"),
+        "opposing_keywords": frozenset({"checkout", "checkouts", "started"}),
+    },
+    {
+        "names": ("dti_ratio", "dti", "debt"),
+        "keywords": frozenset({"dti", "debt"}),
+        "opposing": ("credit_score", "score"),
+        "opposing_keywords": frozenset({"credit", "score", "fico"}),
+    },
+    {
+        "names": ("credit_score", "score"),
+        "keywords": frozenset({"credit", "score", "fico"}),
+        "opposing": ("dti_ratio", "dti", "debt"),
+        "opposing_keywords": frozenset({"dti", "debt"}),
+    },
+)
 
 
 _MONTHS = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?"
@@ -335,7 +386,7 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
     claimed = [False] * len(cleaned)
     claims: list[QuantitativeClaim] = []
 
-    def _sentence_and_words(start: int, end: int) -> tuple[str, frozenset[str]]:
+    def _sentence_and_clause_words(start: int, end: int) -> tuple[str, frozenset[str], frozenset[str]]:
         def _is_boundary(idx: int) -> bool:
             ch = text[idx]
             if ch in "\n\r?!":
@@ -356,8 +407,38 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
         while right < len(text) and not _is_boundary(right):
             right += 1
         s = text[left:right].strip()
-        words = frozenset(re.findall(r"[a-z0-9_-]+", s.lower()))
-        return s, words
+
+        # Clause boundary inside sentence
+        clause_breaks = {",", ";", ":", "(", ")", "[", "]", "—"}
+        c_left = start
+        while c_left > left:
+            if text[c_left - 1] in clause_breaks:
+                break
+            prefix = text[max(left, c_left - 10):c_left]
+            if re.search(r"\b(?:vs|versus|while|whereas|compared to|against)\s*$", prefix, re.IGNORECASE):
+                break
+            c_left -= 1
+
+        c_right = end
+        while c_right < right:
+            if text[c_right] in clause_breaks:
+                break
+            suffix = text[c_right:min(right, c_right + 10)]
+            if re.search(r"^\s*(?:vs|versus|while|whereas|compared to|against)\b", suffix, re.IGNORECASE):
+                break
+            c_right += 1
+
+        c_str = text[c_left:c_right].strip()
+
+        def _expand_tokens(raw_s: str) -> frozenset[str]:
+            raw_tokens = set(re.findall(r"[a-z0-9_-]+", raw_s.lower()))
+            expanded = set(raw_tokens)
+            for t in raw_tokens:
+                if t in _DOMAIN_SYNONYMS:
+                    expanded.add(_DOMAIN_SYNONYMS[t])
+            return frozenset(expanded)
+
+        return s, _expand_tokens(s), _expand_tokens(c_str)
 
     def _take(match: re.Match[str], number_group: int) -> bool:
         start, end = match.span(number_group)
@@ -370,7 +451,7 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
     for match in _PP_PATTERN.finditer(cleaned):
         if _take(match, 2):
             number = match.group(2)
-            sent, words = _sentence_and_words(match.start(), match.end())
+            sent, words, c_words = _sentence_and_clause_words(match.start(), match.end())
             claims.append(QuantitativeClaim(
                 raw_text=match.group(0).strip(),
                 value=_parse_number(number),
@@ -379,12 +460,13 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
                 direction=_direction_from(match.group(1)),
                 sentence=sent,
                 context_words=words,
+                clause_words=c_words,
             ))
 
     for match in _PCT_PATTERN.finditer(cleaned):
         if _take(match, 2):
             number = match.group(2)
-            sent, words = _sentence_and_words(match.start(), match.end())
+            sent, words, c_words = _sentence_and_clause_words(match.start(), match.end())
             claims.append(QuantitativeClaim(
                 raw_text=match.group(0).strip(),
                 value=_parse_number(number),
@@ -393,13 +475,14 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
                 direction=_direction_from(match.group(1)),
                 sentence=sent,
                 context_words=words,
+                clause_words=c_words,
             ))
 
     for match in _CURRENCY_PATTERN.finditer(cleaned):
         if _take(match, 1):
             number = match.group(1)
             multiplier = _SUFFIX_MULTIPLIER.get((match.group(2) or "").lower(), 1.0)
-            sent, words = _sentence_and_words(match.start(), match.end())
+            sent, words, c_words = _sentence_and_clause_words(match.start(), match.end())
             claims.append(QuantitativeClaim(
                 raw_text=match.group(0).strip(),
                 value=_parse_number(number) * multiplier,
@@ -407,6 +490,7 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
                 tolerance=_rounding_tolerance(number, multiplier),
                 sentence=sent,
                 context_words=words,
+                clause_words=c_words,
             ))
 
     for match in _PLAIN_PATTERN.finditer(cleaned):
@@ -419,7 +503,7 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
         if "." not in number and multiplier == 1.0 and value <= 10:
             continue
         _take(match, 1)
-        sent, words = _sentence_and_words(match.start(), match.end())
+        sent, words, c_words = _sentence_and_clause_words(match.start(), match.end())
         claims.append(QuantitativeClaim(
             raw_text=match.group(0).strip(),
             value=value,
@@ -427,6 +511,7 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
             tolerance=_rounding_tolerance(number, multiplier),
             sentence=sent,
             context_words=words,
+            clause_words=c_words,
         ))
 
     return claims
@@ -658,19 +743,46 @@ def _entity_and_metric_compatible(
     category_values: Mapping[str, set[str]],
     all_values: list[_GroundingValue],
 ) -> tuple[bool, str]:
+    words = claim.clause_words or claim.context_words
+
     # 1. Entity swap check: if an opposing entity in the same category is mentioned
-    # in the sentence while the evidence's own entity is absent, this is an entity swap.
+    # in the clause or sentence while the evidence's own entity is absent, this is an entity swap.
     for cat, val in grounding.entity_context.items():
         all_vals = category_values.get(cat, set())
         if len(all_vals) > 1:
             for opp_val in all_vals:
-                if opp_val != val and opp_val in claim.context_words and val not in claim.context_words:
-                    return False, f"entity swap: claimed for '{opp_val}' but evidence is for '{val}'"
+                if opp_val != val:
+                    if opp_val in words and val not in words:
+                        return False, f"entity swap: claimed for '{opp_val}' but evidence is for '{val}'"
+                    if opp_val in claim.context_words and val not in claim.context_words:
+                        return False, f"entity swap: claimed for '{opp_val}' but evidence is for '{val}'"
 
-    # 2. Metric mismatch check: a percentage claim attributing a DTI value to a credit score
+    # 1b. Variant swap & unconditioned variant checks
+    if "variant" in grounding.entity_context:
+        v_val = grounding.entity_context["variant"]
+        opp_variant = "b" if v_val == "a" else "a"
+        if opp_variant in claim.clause_words and v_val not in claim.clause_words:
+            return False, f"variant swap: claimed for variant '{opp_variant}' but evidence is for '{v_val}'"
+
+        # If claim explicitly attributes this number to an entity category (like device) absent from grounding
+        for dev in category_values.get("device", set()):
+            if dev in claim.context_words and "device" not in grounding.entity_context:
+                if not any(k in claim.context_words for k in ("variant", "control", "treatment", "exp", "experiment", v_val)):
+                    return False, f"unconditioned variant {v_val} cannot ground specific entity '{dev}'"
+
+    # 2. Metric check: opposing funnel/domain metrics
+    leaf_lower = grounding.leaf.lower() if grounding.leaf else ""
+    for rule in _METRIC_OPPOSITIONS:
+        if any(n in leaf_lower for n in rule["names"]):
+            has_opp = any(k in words for k in rule["opposing_keywords"])
+            has_own = any(k in words for k in rule["keywords"])
+            if has_opp and not has_own:
+                opp_name = sorted(rule["opposing_keywords"])[0]
+                return False, f"metric mismatch: claimed for '{opp_name}' but evidence is '{grounding.leaf}'"
+
+    # 3. DTI vs credit score check
     if claim.claim_type in ("percentage", "percentage_points"):
         if grounding.leaf:
-            leaf_lower = grounding.leaf.lower()
             if "dti" in leaf_lower or "debt" in leaf_lower:
                 if ("credit" in claim.context_words or "score" in claim.context_words) and "dti" not in claim.context_words and "debt" not in claim.context_words:
                     return False, f"metric mismatch: percentage claim mentions credit/score but evidence is '{grounding.leaf}'"

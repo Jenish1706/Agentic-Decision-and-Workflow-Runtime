@@ -29,9 +29,15 @@ import measure_verifier
 def generate_readme_verifier_table(v_metrics: dict) -> str:
     r = v_metrics["random"]
     oor = v_metrics["out_of_range"]
-    s = v_metrics["swaps"]
+    plaus = v_metrics["plausible_pct"]
+    gaps = v_metrics["pp_gaps"]
+    rels = v_metrics["relative_changes"]
+    es = v_metrics["entity_swaps"]
+    syn = v_metrics["synonym_swaps"]
+    met = v_metrics["metric_swaps"]
     rev = v_metrics["reversal"]
     ver = v_metrics["version"]
+    cor = v_metrics["correct"]
     trials = v_metrics["trials"]
 
     return (
@@ -40,9 +46,15 @@ def generate_readme_verifier_table(v_metrics: dict) -> str:
         "|---|---|---|\n"
         f"| Random fabricated claims accepted ({trials:,} trials) | {r['baseline_count']:,} ({r['baseline_pct']:.1%}) | {r['current_count']:,} ({r['current_pct']:.1%}) |\n"
         f"| Out-of-range claims accepted ({trials:,} trials) | {oor['baseline_count']:,} ({oor['baseline_pct']:.1%}) | {oor['current_count']:,} ({oor['current_pct']:.1%}) |\n"
-        f"| Entity swaps accepted ({s['trials']} trials) | {s['baseline_count']} ({s['baseline_pct']:.1%}) | {s['current_count']} ({s['current_pct']:.1%}) |\n"
+        f"| Plausible-range percentages (1.4-4.3%, {trials:,} trials) | {plaus['baseline_count']:,} ({plaus['baseline_pct']:.1%}) | {plaus['current_count']:,} ({plaus['current_pct']:.1%}) |\n"
+        f"| Percentage-point gaps (0.1-3.0 pp, {trials:,} trials) | {gaps['baseline_count']:,} ({gaps['baseline_pct']:.1%}) | {gaps['current_count']:,} ({gaps['current_pct']:.1%}) |\n"
+        f"| Relative changes (1-60%, {trials:,} trials) | {rels['baseline_count']:,} ({rels['baseline_pct']:.1%}) | {rels['current_count']:,} ({rels['current_pct']:.1%}) |\n"
+        f"| Entity swaps accepted ({es['trials']} trials) | {es['baseline_count']} ({es['baseline_pct']:.1%}) | {es['current_count']} ({es['current_pct']:.1%}) |\n"
+        f"| Synonym swaps accepted ({syn['trials']} trials) | {syn['baseline_count']} ({syn['baseline_pct']:.1%}) | {syn['current_count']} ({syn['current_pct']:.1%}) |\n"
+        f"| Metric swaps accepted ({met['trials']} trials) | {met['baseline_count']} ({met['baseline_pct']:.1%}) | {met['current_count']} ({met['current_pct']:.1%}) |\n"
         f"| Direction reversal (\"fell\" for +1.33 pp) | {rev['baseline']} | {rev['current']} |\n"
         f"| Version number in factual sentence (\"iOS 17\") | {ver['baseline']} | {ver['current']} |\n"
+        f"| Correct answers accepted ({cor['total']} benchmark cases) | {cor['baseline_count']}/{cor['total']} ({cor['baseline_pct']:.1%}) | {cor['current_count']}/{cor['total']} ({cor['current_pct']:.1%}) |\n"
         "<!-- END_VERIFIER_TABLE -->"
     )
 
@@ -65,9 +77,15 @@ def generate_readme_citation_table(c_metrics: dict) -> str:
 def generate_evaluation_verifier_table(v_metrics: dict) -> str:
     r = v_metrics["random"]
     oor = v_metrics["out_of_range"]
-    s = v_metrics["swaps"]
+    plaus = v_metrics["plausible_pct"]
+    gaps = v_metrics["pp_gaps"]
+    rels = v_metrics["relative_changes"]
+    es = v_metrics["entity_swaps"]
+    syn = v_metrics["synonym_swaps"]
+    met = v_metrics["metric_swaps"]
     rev = v_metrics["reversal"]
     ver = v_metrics["version"]
+    cor = v_metrics["correct"]
     trials = v_metrics["trials"]
 
     return (
@@ -76,10 +94,15 @@ def generate_evaluation_verifier_table(v_metrics: dict) -> str:
         "|---|---|---|\n"
         f"| Random fabricated claims accepted ({trials:,}; percentages 0.5-60%, gaps 0.2-15 pp, \"fell\" 1-90%) | {r['baseline_count']:,} ({r['baseline_pct']:.1%}) | {r['current_count']:,} ({r['current_pct']:.1%}) |\n"
         f"| Out-of-range claims accepted ({trials:,}; 45-95%, 5-40 pp, counts 3,000-99,000 - no real value or absolute difference in range) | {oor['baseline_count']:,} ({oor['baseline_pct']:.1%}) | {oor['current_count']:,} ({oor['current_pct']:.1%}) |\n"
-        f"| Entity swaps accepted (claiming desktop rate for mobile) | {s['baseline_count']} ({s['baseline_pct']:.1%}) | {s['current_count']} ({s['current_pct']:.1%}) |\n"
+        f"| Plausible-range percentages ({trials:,}; 1.4-4.3% range) | {plaus['baseline_count']:,} ({plaus['baseline_pct']:.1%}) | {plaus['current_count']:,} ({plaus['current_pct']:.1%}) |\n"
+        f"| Percentage-point gaps ({trials:,}; 0.1-3.0 pp range) | {gaps['baseline_count']:,} ({gaps['baseline_pct']:.1%}) | {gaps['current_count']:,} ({gaps['current_pct']:.1%}) |\n"
+        f"| Relative changes ({trials:,}; whole-number falls 1-60%) | {rels['baseline_count']:,} ({rels['baseline_pct']:.1%}) | {rels['current_count']:,} ({rels['current_pct']:.1%}) |\n"
+        f"| Entity swaps accepted ({es['trials']} trials, phrased multiple ways) | {es['baseline_count']} ({es['baseline_pct']:.1%}) | {es['current_count']} ({es['current_pct']:.1%}) |\n"
+        f"| Synonym swaps accepted ({syn['trials']} trials, phone/workstation/laptop) | {syn['baseline_count']} ({syn['baseline_pct']:.1%}) | {syn['current_count']} ({syn['current_pct']:.1%}) |\n"
+        f"| Metric swaps accepted ({met['trials']} trials, checkout vs purchase / DTI vs score) | {met['baseline_count']} ({met['baseline_pct']:.1%}) | {met['current_count']} ({met['current_pct']:.1%}) |\n"
         f"| \"Variant B fell by 1.33 percentage points\" (evidence: +1.333) | {rev['baseline']} | {rev['current']} |\n"
         f"| Version number accepted as valid (\"...iOS 17 update\") | {ver['baseline']} | {ver['current']} |\n"
-        "| Three correct answers | - | all accepted |\n"
+        f"| Benchmark correct answers ({cor['total']} trials, false rejection control) | {cor['baseline_count']}/{cor['total']} ({cor['baseline_pct']:.1%}) | {cor['current_count']}/{cor['total']} ({cor['current_pct']:.1%}) |\n"
         "<!-- END_VERIFIER_TABLE -->"
     )
 

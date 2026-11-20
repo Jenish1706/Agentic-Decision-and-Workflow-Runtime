@@ -149,3 +149,28 @@ def test_metric_mismatch_is_rejected():
     assert not verify_numerical_grounding("Credit score was 28%.", ledger).valid
     assert verify_numerical_grounding("DTI ratio was 28%.", ledger).valid
 
+
+def test_audit_section_0_2_probes_are_rejected():
+    from scripts.measure_verifier import build_ledger
+    ledger = build_ledger()
+    # 1. Entity swap: claiming mobile's rate (1.6%) for desktop
+    assert not verify_numerical_grounding("Desktop users converted at just 1.6% last week.", ledger).valid
+    # 2. Synonym swap: phone is mobile, but desktop converted at 4.1%
+    assert not verify_numerical_grounding("The phone checkout converted at 4.1%.", ledger).valid
+    # 3. Metric swap: 2,700 is checkouts started, not purchases completed
+    assert not verify_numerical_grounding("Mobile purchases completed totalled 2,700 on one day.", ledger).valid
+
+
+def test_correct_answers_remain_fully_accepted():
+    from scripts.measure_verifier import build_ledger
+    ledger = build_ledger()
+    correct = [
+        "Mobile conversion dropped from 2.8% to 1.6% last week.",
+        "Variant B converted at 2.9% vs 1.6% for A, a 1.33 pp improvement (p = 0.014).",
+        "Mobile checkouts started totalled 2,700 on one day.",
+    ]
+    for ans in correct:
+        res = verify_numerical_grounding(ans, ledger)
+        assert res.valid, f"Failed on: '{ans}', issues: {res.issues}"
+
+
