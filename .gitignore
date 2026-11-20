@@ -1,15 +1,29 @@
+# Python caches and bytecode
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+catboost_info/
+
+# Environments
 .venv/
 .env
+
+# Distribution and builds
 *.egg-info/
 dist/
 build/
-.pytest_cache/
-.ruff_cache/
+
+# Temporary and scratch
+scratch/
+tmp/
+*.log
+.DS_Store
+
+# Data runtime artifacts
 data/index/
 data/long_term_memory.json
 data/eval_report.json
-*.log
-.DS_Store
-scratch/
