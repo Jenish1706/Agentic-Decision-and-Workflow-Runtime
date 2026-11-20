@@ -22,7 +22,14 @@ from domains.product_analytics.server import execute_sql as analytics_sql
 from .fakes import FakeLLMClient, FunctionTool
 
 
-def _run_domain(domain: str, tool: FunctionTool, call_arguments: dict, answer: str, proposal: ProposedDecision | None):
+def _run_domain(
+    domain: str,
+    tool: FunctionTool,
+    call_arguments: dict,
+    answer: str,
+    proposal: ProposedDecision | None,
+    query: str | None = None,
+):
     tools = ToolRegistry()
     tools.register(tool)
     decisions = [
@@ -41,7 +48,7 @@ def _run_domain(domain: str, tool: FunctionTool, call_arguments: dict, answer: s
         policy_engine=load_domain(domain).create_policy_engine(),
         max_steps=4,
     )
-    return runtime.run(f"{domain} task")
+    return runtime.run(query or f"{domain} task")
 
 
 def _proposal(action: str, **parameters) -> ProposedDecision:
@@ -74,6 +81,7 @@ async def test_credit_risk_through_runtime():
         {"account_id": "ACCT-101"},
         "Approve ACCT-101's increase to $8,000; credit score 740.",
         _proposal("approve_increase", account_id="ACCT-101", increase_amount=3000),
+        query="Evaluate credit limit increase for ACCT-101.",
     )
     assert state.policy_evaluation.final_status == PolicyStatus.ALLOWED
 
@@ -86,6 +94,7 @@ async def test_multimodal_through_runtime():
         {"document_path": "inv-2026-004.json"},
         "Approve payment of $453.60 for INV-2026-004.",
         _proposal("approve_payment", document_id="INV-2026-004"),
+        query="Audit invoice INV-2026-004.",
     )
     assert state.evidence_ledger.all()[0].source == EvidenceSource.VISION_VLM
     assert state.policy_evaluation.final_status == PolicyStatus.ALLOWED
@@ -99,6 +108,7 @@ async def test_enterprise_operations_through_runtime():
         {"service_name": "recommendation-worker"},
         "Scale recommendation-worker for INC-903 (10.0% blast radius).",
         _proposal("scale_workers", incident_id="INC-903", blast_radius_pct=10),
+        query="Scale recommendation-worker for INC-903 (10.0% blast radius).",
     )
     assert state.policy_evaluation.final_status == PolicyStatus.ALLOWED
     assert state.audit_trace["evidence_count"] == 1
