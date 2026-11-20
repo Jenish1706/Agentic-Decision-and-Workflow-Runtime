@@ -48,6 +48,9 @@ All result numbers reflect verified code runs rendered via `scripts/render_readm
 - **Recall@3:** 0.98 (Bi-encoder naive) $\to$ 0.98 (Cross-encoder reranked).
 - **MRR:** 0.92 (Bi-encoder naive) $\to$ 0.93 (Cross-encoder reranked).
 
+### 1.4 End-to-End LLM Evaluation Status
+There is currently **no end-to-end LLM measurement** beyond the 5-question smoke run (`data/eval_report.json`). Full-scale live LLM evaluation scripts (`scripts/run_cross_domain_eval.py` and `scripts/run_budget_experiment.py`) require an active Ollama instance and local model server; in its absence, these evaluations remain deferred. All reported benchmark figures for verifiers and policies reflect deterministic code measurements over benchmark datasets.
+
 ---
 
 ## 2. Null & Negative Results
@@ -71,6 +74,7 @@ All result numbers reflect verified code runs rendered via `scripts/render_readm
 
 ### 3.2 Internal Validity
 - **Deterministic LLM Fakes in CI:** The automated test suite uses scripted `FakeLLMClient` instances. While this guarantees hermeticity and repeatability, it does not capture stochastic sampling drift of real temperature $> 0$ model inference. Real-model evaluation requires live runs via `scripts/run_evaluation.py`.
+- **No End-to-End LLM Measurement Beyond Smoke Run:** There is currently **no end-to-end LLM measurement** beyond the initial 5-question smoke run (`data/eval_report.json`). Large-scale live LLM evaluations (`scripts/run_cross_domain_eval.py` and `scripts/run_budget_experiment.py`) remain deferred pending a configured Ollama environment. All reported benchmark metrics reflect deterministic verifier and policy evaluations.
 
 ### 3.3 External Validity
 - **Generalization Across Domains:** The runtime was validated across four enterprise domains (credit underwriting, systems operations, document audit, and product analytics). Novel domains with fundamentally different entity models (e.g. graph-based knowledge networks or continuous temporal control) would require custom entity binding logic.
