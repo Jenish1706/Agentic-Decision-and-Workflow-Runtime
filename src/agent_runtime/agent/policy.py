@@ -275,12 +275,14 @@ class PolicyEngine:
         name: str = "policy",
         guidance: str = "",
         entity_binding: Mapping[str, Any] | None = None,
+        permit_tools: frozenset[str] | tuple[str, ...] | list[str] | None = None,
     ):
         self._rules: list[PolicyRuleFn] = list(rules or [])
         self._thresholds: Mapping[str, float] = MappingProxyType(dict(thresholds or {}))
         self.name = name
         self.guidance = guidance
         self.entity_binding: Mapping[str, Any] = MappingProxyType(dict(entity_binding or {}))
+        self.permit_tools: frozenset[str] = frozenset(permit_tools or ())
 
     @property
     def thresholds(self) -> Mapping[str, float]:

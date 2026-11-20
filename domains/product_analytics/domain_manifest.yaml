@@ -25,6 +25,9 @@ entity_binding:
     - '(?i)\b(?:(?:experiment|exp)[_\s-]*(?:number|num|no)?[_\s#-]*(\d+)|exp[_\s-]?(\d+))\b'
   prefix: "exp-"
 
+permit_tools:
+  - test_significance
+
 policy_rules:
   - name: statistical_significance_gate
     on_violation: BLOCKED

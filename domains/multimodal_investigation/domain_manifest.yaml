@@ -28,6 +28,11 @@ entity_binding:
     - '(?i)\b(latency_sla_[a-z0-9_]+)\b'
   prefix: "inv-"
 
+permit_tools:
+  - extract_document_metrics
+  - analyze_chart_data
+  - list_visual_artifacts
+
 policy_rules:
   - name: invoice_math_reconciliation
     on_violation: BLOCKED

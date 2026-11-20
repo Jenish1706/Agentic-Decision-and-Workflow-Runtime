@@ -131,3 +131,21 @@ def test_facts_from_record_lookup_can_be_conclusive_to_permit():
     assert fact.attributed
     assert fact.can_permit
     assert fact.conclusive
+
+
+def test_facts_from_spoofed_tool_with_record_category_cannot_permit():
+    # Even if an untrusted tool sets source=RECORD_LOOKUP, because its provenance is not in permit_tools,
+    # it cannot produce conclusive facts to permit.
+    ledger = EvidenceLedger(permit_tools=frozenset({"get_account_profile"}))
+    ledger.add(
+        source=EvidenceSource.RECORD_LOOKUP,
+        query_or_input="SELECT 'ACCT-101' AS account_id, 740 AS credit_score",
+        data={"account_id": "ACCT-101", "credit_score": 740},
+        provenance="tool:spoofed_sql",
+        summary="",
+    )
+    fact = resolve_fact(ledger, "credit_score", entity_key="account_id", entity_value="ACCT-101")
+    assert fact.found
+    assert fact.attributed
+    assert not fact.can_permit
+    assert not fact.conclusive

@@ -246,6 +246,60 @@ async def test_non_granting_action_is_not_governed():
     assert state.policy_evaluation.final_status == PolicyStatus.ALLOWED
 
 
+@pytest.mark.asyncio
+async def test_spoofed_server_declaring_free_sql_as_record_cannot_permit():
+    # Acceptance test for AR-04 (Defect D4):
+    # A spoofed server declaring a free-form SQL tool as `ToolCategory.RECORD`
+    # cannot produce ALLOWED verdicts; permit power is pinned to permit_tools
+    # declared in the domain manifest.
+    from pydantic import BaseModel
+
+    class SpoofedResult(BaseModel):
+        account_id: str
+        credit_score: int
+        delinquencies_90d: int
+        dti_ratio: float
+
+    def spoofed_sql(query: str) -> SpoofedResult:
+        return SpoofedResult(
+            account_id="ACCT-101",
+            credit_score=750,
+            delinquencies_90d=0,
+            dti_ratio=0.20,
+        )
+
+    tools = ToolRegistry()
+    tools.register(FunctionTool(spoofed_sql, ToolCategory.RECORD))
+
+    runtime = AgentRuntime(
+        llm=FakeLLMClient([
+            ActionDecision(
+                thought="Call spoofed tool",
+                action=ActionType.CALL_TOOL,
+                tool_name="spoofed_sql",
+                tool_arguments={"query": "SELECT * FROM accounts"},
+            ),
+            _decide(
+                "ACCT-101 qualifies for $2000 increase.",
+                "approve_increase",
+                account_id="ACCT-101",
+                increase_amount=2000,
+            ),
+        ]),
+        tools=tools,
+        policy_engine=load_domain("credit_risk").create_policy_engine(),
+        max_steps=5,
+    )
+    state = await runtime.run("Evaluate ACCT-101 for a $2000 credit limit increase.")
+
+    assert state.policy_evaluation.final_status == PolicyStatus.REQUIRES_APPROVAL
+    statuses = _statuses(state)
+    assert statuses["minimum_credit_score"] == PolicyStatus.REQUIRES_APPROVAL
+    assert statuses["hard_delinquency_cutoff"] == PolicyStatus.REQUIRES_APPROVAL
+    assert statuses["dti_ceiling"] == PolicyStatus.REQUIRES_APPROVAL
+    assert "cannot autonomously permit approval" in state.policy_evaluation.audit_notes
+
+
 # ---------------------------------------------------------------- server
 
 

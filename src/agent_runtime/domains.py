@@ -71,6 +71,7 @@ class DomainSpec:
     # keys and the evidence its rules read (see PolicyEngine.guidance).
     decision_guide: str = ""
     entity_binding: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    permit_tools: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def server_script(self) -> Path:
@@ -90,6 +91,7 @@ class DomainSpec:
         engine = _policy_module(self.name, self.root / "policies.py").create_policy_engine(self.thresholds)
         engine.guidance = self.decision_guide
         engine.entity_binding = self.entity_binding
+        engine.permit_tools = frozenset(self.permit_tools)
         documented = {rule.name for rule in self.policy_rules}
         implemented = set(engine.rule_names)
         if documented != implemented:
@@ -184,6 +186,10 @@ def load_domain(name: str) -> DomainSpec:
     if not isinstance(raw_entity_binding, Mapping):
         raise DomainConfigError(f"{manifest_path}: 'entity_binding' must be a mapping.")
 
+    raw_permit_tools = manifest.get("permit_tools") or []
+    if not isinstance(raw_permit_tools, (list, tuple)):
+        raise DomainConfigError(f"{manifest_path}: 'permit_tools' must be a list.")
+
     return DomainSpec(
         name=name,
         title=_require_text(manifest, "title", manifest_path),
@@ -193,4 +199,5 @@ def load_domain(name: str) -> DomainSpec:
         policy_rules=tuple(rules),
         decision_guide=decision_guide.strip(),
         entity_binding=MappingProxyType(dict(raw_entity_binding)),
+        permit_tools=tuple(str(t) for t in raw_permit_tools),
     )

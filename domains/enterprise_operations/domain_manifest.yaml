@@ -36,6 +36,12 @@ entity_binding:
     - "recommendation-worker"
     - "payments-service"
 
+permit_tools:
+  - get_incident_telemetry
+  - list_service_incidents
+  - inspect_service_config
+  - simulate_remediation_action
+
 policy_rules:
   - name: active_p0_incident_freeze
     on_violation: BLOCKED

@@ -78,6 +78,18 @@ _ID_PREFIX: dict[EvidenceSource, str] = {
     EvidenceSource.CALCULATOR: "calc",
 }
 
+DEFAULT_PERMIT_TOOLS: frozenset[str] = frozenset({
+    "get_account_profile",
+    "list_service_incidents",
+    "inspect_service_config",
+    "get_incident_telemetry",
+    "simulate_remediation_action",
+    "extract_document_metrics",
+    "analyze_chart_data",
+    "list_visual_artifacts",
+    "test_significance",
+})
+
 
 def freeze(value: Any) -> Any:
     """Recursively convert containers into read-only equivalents.
@@ -118,6 +130,7 @@ class EvidenceItem:
     summary: str
     parent_evidence_ids: tuple[str, ...] = field(default_factory=tuple)
     timestamp: float = field(default_factory=time.time)
+    can_permit: bool = False
 
     def __post_init__(self) -> None:
         # A frozen dataclass forbids normal attribute assignment, so the one
@@ -139,6 +152,7 @@ class EvidenceItem:
             "summary": self.summary,
             "parent_evidence_ids": list(self.parent_evidence_ids),
             "timestamp": self.timestamp,
+            "can_permit": self.can_permit,
         }
 
     @classmethod
@@ -153,6 +167,7 @@ class EvidenceItem:
             summary=payload.get("summary", ""),
             parent_evidence_ids=tuple(payload.get("parent_evidence_ids", [])),
             timestamp=payload.get("timestamp", time.time()),
+            can_permit=payload.get("can_permit", False),
         )
 
 
@@ -165,8 +180,9 @@ class EvidenceLedger:
     copying.
     """
 
-    def __init__(self, run_id: str | None = None):
+    def __init__(self, run_id: str | None = None, permit_tools: frozenset[str] | None = None):
         self._run_id = run_id or f"run-{int(time.time() * 1000)}"
+        self._permit_tools = frozenset(permit_tools) if permit_tools is not None else None
         self._items: list[EvidenceItem] = []
         self._index_by_id: dict[str, EvidenceItem] = {}
         # Highest sequence number issued per source. Tracked explicitly rather
@@ -203,6 +219,7 @@ class EvidenceLedger:
         kind: EvidenceKind = EvidenceKind.OBSERVATION,
         parent_evidence_ids: list[str] | tuple[str, ...] | None = None,
         evidence_id: str | None = None,
+        can_permit: bool | None = None,
     ) -> EvidenceItem:
         if evidence_id is None:
             evidence_id = self._next_evidence_id(source)
@@ -216,6 +233,14 @@ class EvidenceLedger:
             if parent_id not in self._index_by_id:
                 raise ValueError(f"Parent evidence '{parent_id}' does not exist in ledger.")
 
+        if can_permit is None:
+            if provenance.startswith("tool:"):
+                tool_name = provenance.removeprefix("tool:")
+                permit_set = self._permit_tools if self._permit_tools is not None else DEFAULT_PERMIT_TOOLS
+                can_permit = tool_name in permit_set
+            else:
+                can_permit = source is not EvidenceSource.ANALYTICS_SQL
+
         item = EvidenceItem(
             evidence_id=evidence_id,
             source=source,
@@ -225,6 +250,7 @@ class EvidenceLedger:
             provenance=provenance,
             summary=summary,
             parent_evidence_ids=parents,
+            can_permit=can_permit,
         )
         self._items.append(item)
         self._index_by_id[item.evidence_id] = item

@@ -199,6 +199,7 @@ class AgentRuntime:
         max_retrievals: int | None = None,
         policy_engine: PolicyEngine | None = None,
         budget: ActionBudget | None = None,
+        permit_tools: frozenset[str] | tuple[str, ...] | list[str] | None = None,
     ):
         self._llm = llm
         self._tools = tools
@@ -215,6 +216,12 @@ class AgentRuntime:
         # immutable ActionBudget is stored here; the mutable counter is created
         # inside run(), so no consumption can leak from one run into the next.
         self._default_budget = budget
+        if permit_tools is not None:
+            self._permit_tools: frozenset[str] = frozenset(permit_tools)
+        elif policy_engine is not None and getattr(policy_engine, "permit_tools", None):
+            self._permit_tools = frozenset(policy_engine.permit_tools)
+        else:
+            self._permit_tools = frozenset()
 
     # ------------------------------------------------------------------ session
 
@@ -292,6 +299,8 @@ class AgentRuntime:
         allocation for this run only (used by adaptive budgeting, which picks
         a budget per question)."""
         state = AgentState(query=query)
+        if self._permit_tools:
+            state.evidence_ledger._permit_tools = self._permit_tools
         citation_map: dict[str, Any] = {}
 
         allocation = budget or self._default_budget
@@ -480,6 +489,7 @@ class AgentRuntime:
             return f"Tool error: {result.error}", StepStatus.ERROR
 
         source, kind = _EVIDENCE_FOR_CATEGORY[category or ToolCategory.RECORD]
+        can_permit = tool_name in self._permit_tools if self._permit_tools else False
         state.evidence_ledger.add(
             source=source,
             kind=kind,
@@ -487,6 +497,7 @@ class AgentRuntime:
             data=_evidence_payload(result),
             provenance=f"tool:{tool_name}",
             summary=_clip(result.content),
+            can_permit=can_permit,
         )
         return result.content, StepStatus.OK
 

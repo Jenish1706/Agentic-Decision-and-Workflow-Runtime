@@ -27,6 +27,9 @@ entity_binding:
     - '(?i)\b(?:(?:acct|account|customer|applicant)(?:[_\s]+(?:on|for)[_\s]+(?:the[_\s]+)?account)?[_\s-]*(?:number|num|no)?[_\s#-]*(\d+)|acct[_\s-]?(\d+))\b'
   prefix: "acct-"
 
+permit_tools:
+  - get_account_profile
+
 policy_rules:
   - name: minimum_credit_score
     on_violation: BLOCKED

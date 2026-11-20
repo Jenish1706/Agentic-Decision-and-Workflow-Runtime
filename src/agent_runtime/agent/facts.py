@@ -250,14 +250,14 @@ def resolve_fact(
 
     distinct = _distinct([value for value, _ in chosen])
     evidence_ids = tuple(dict.fromkeys(evidence_id for _, evidence_id in chosen))
-    # Evidence the model can shape (free-form SQL) may block or escalate, but never permit.
-    from .evidence import EvidenceSource
-    sources = [
-        ledger.get_by_id(ev_id).source
+    # Evidence can permit only when backed by permit-capable tools (pinned in client / domain manifest).
+    # Ignore server-declared categories.
+    items = [
+        ledger.get_by_id(ev_id)
         for ev_id in evidence_ids
         if ledger is not None and ledger.get_by_id(ev_id) is not None
     ]
-    can_permit = any(src is not EvidenceSource.ANALYTICS_SQL for src in sources) if sources else False
+    can_permit = all(item.can_permit for item in items) if items else False
 
     return ResolvedFact(
         field=field,
