@@ -95,10 +95,12 @@ _DEFAULT_ENTITY_PATTERNS = [
         ),
         _clean_inv_match,
     ),
-    # Services
+    # Services (normalise spaces, hyphens and underscores)
     (
-        re.compile(r"(?i)\b([a-z0-9]+(?:-[a-z0-9]+)*(?:-service|-api|-worker|-gateway))\b"),
-        lambda m: m.group(1).casefold(),
+        re.compile(
+            r"(?i)\b([a-z0-9]+(?:[-_][a-z0-9]+)*[-_\s]+(?:service|api|worker|gateway)|legacy[-_\s]+billing)\b"
+        ),
+        lambda m: re.sub(r"[_\s]+", "-", m.group(1).casefold()),
     ),
     # Incidents
     (
@@ -318,8 +320,10 @@ class PolicyEngine:
             except Exception:
                 pass
         for alias in self.entity_binding.get("aliases") or []:
-            if re.search(rf"\b{re.escape(str(alias))}\b", text, re.IGNORECASE):
-                found.add(_canonicalize_entity(str(alias)))
+            alias_str = str(alias)
+            alias_pat = re.sub(r"[-_\s]+", r"[-_\\s]+", re.escape(alias_str))
+            if re.search(rf"\b{alias_pat}\b", text, re.IGNORECASE):
+                found.add(_canonicalize_entity(alias_str))
 
         # 2. Multi-domain default patterns
         for regex, transform in _DEFAULT_ENTITY_PATTERNS:

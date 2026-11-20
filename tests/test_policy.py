@@ -237,4 +237,49 @@ def test_target_entity_binding_section_0_3_probes_matching_allowed(query, parame
     assert "target_entity_binding" not in [r.rule_name for r in evaluation.rule_results]
 
 
+def test_ar16_service_name_separator_normalization():
+    # Service name separator variants are normalised (checkout service == checkout-service == checkout_service)
+    prop = _proposal(parameters={"service_name": "checkout-service"})
+    for q in [
+        "restart the checkout service",
+        "restart checkout_service",
+        "restart checkout-service",
+        "please restart checkout service immediately",
+    ]:
+        ctx = DecisionContext(subject_or_entity=q)
+        res = PolicyEngine([_allowed]).evaluate(prop, ctx)
+        assert res.final_status == PolicyStatus.ALLOWED, f"Expected ALLOWED for query '{q}'"
+        assert "target_entity_binding" not in [r.rule_name for r in res.rule_results]
+
+
+def test_ar16_correct_requests_escalation_rate():
+    # 10 correct-target requests from audit: 9 allowed, 1 escalated due to peer account in free text note
+    correct_requests = [
+        ("Should we approve ACCT-101 for an increase?", {"account_id": "ACCT-101"}),
+        ("approve account number 101", {"account_id": "ACCT-101"}),
+        ("raise the limit for customer 101", {"account_id": "ACCT-101"}),
+        ("approve the applicant on account #101", {"account_id": "ACCT-101"}),
+        ("roll out experiment EXP 204 to 25%", {"experiment_id": "EXP-204"}),
+        ("Audit invoice INV-2026-004 for payment.", {"document_id": "INV-2026-004"}),
+        ("Can we scale recommendation-worker for INC-903 with a 10% blast radius?", {"incident_id": "INC-903"}),
+        ("pay invoice INV-2024-001", {"document_path": "invoices/INV-2024-001.json"}),
+        ("restart the checkout service", {"service_name": "checkout-service"}),
+        ("approve ACCT-105", {"account_id": "ACCT-105", "note": "Consolidated with ACCT-101"}),
+    ]
+    escalated = []
+    allowed = []
+    engine = PolicyEngine([_allowed])
+    for query, params in correct_requests:
+        ctx = DecisionContext(subject_or_entity=query)
+        res = engine.evaluate(_proposal(parameters=params), ctx)
+        if res.final_status == PolicyStatus.REQUIRES_APPROVAL:
+            escalated.append((query, params))
+        elif res.final_status == PolicyStatus.ALLOWED:
+            allowed.append((query, params))
+
+    assert len(allowed) == 9
+    assert len(escalated) == 1
+    assert escalated[0][0] == "approve ACCT-105"
+
+
 

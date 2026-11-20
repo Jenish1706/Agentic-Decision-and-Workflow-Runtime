@@ -120,8 +120,8 @@ class ResolvedFact:
 
 
 def normalize_identifier(value: Any) -> str:
-    """Canonical form for comparing identifiers: 'ACCT-101 ' == 'acct-101'."""
-    return str(value).strip().casefold()
+    """Canonical form for comparing identifiers: 'ACCT-101 ' == 'acct-101', 'checkout service' == 'checkout-service'."""
+    return re.sub(r"[_\s]+", "-", str(value).strip().casefold())
 
 
 def as_number(value: Any) -> float | None:

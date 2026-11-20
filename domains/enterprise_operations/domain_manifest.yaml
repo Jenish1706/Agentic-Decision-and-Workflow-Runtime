@@ -30,7 +30,7 @@ entity_binding:
     - incident_id
     - incident
   patterns:
-    - '(?i)\b([a-z0-9]+(?:-[a-z0-9]+)*(?:-service|-api|-worker|-gateway))\b'
+    - '(?i)\b([a-z0-9]+(?:[-_][a-z0-9]+)*[-_\s]+(?:service|api|worker|gateway)|legacy[-_\s]+billing)\b'
     - '(?i)\b(inc[_\s-]?\d+)\b'
   aliases:
     - "auth-service"

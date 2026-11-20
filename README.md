@@ -40,6 +40,11 @@ Observations from tool invocations, database queries, and retrieval chunks are c
 - **Fail-Closed Target Binding:** Proposed targets must match the entity requested in the user prompt, resolved from manifest `target_params`. If parameter entities differ or no entity is found, the engine fails closed to `REQUIRES_APPROVAL`.
 - **Client-Pinned Permit Tools:** Authority comes exclusively from `permit_tools` declared in the client's domain manifest (`domain_manifest.yaml`). Server-declared categories (e.g. an untrusted MCP server claiming `category: "record"`) are ignored.
 
+| Target Binding Metric | Result | Notes |
+|---|---|---|
+| Wrong-target attack probes caught | 15/15 (100.0%) | Delimiter swaps, cross-entity mismatches, path-key injections |
+| correct requests escalated 1/10 | 1/10 (10.0%) | Safe fail-closed cost: free-text note referencing peer account ACCT-101 |
+
 ---
 
 ## 5. Answer Checks: Numbers and Citations
