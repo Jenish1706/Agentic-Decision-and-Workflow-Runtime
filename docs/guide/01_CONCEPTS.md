@@ -288,5 +288,5 @@ Where $\Phi$ is the standard normal cumulative distribution function.
 Since $p = 0.0020 < \alpha = 0.05$ and $\hat{p}_2 > \hat{p}_1$, the experiment passes statistical significance.
 
 ### Code Reference
-- Implemented in: `two_proportion_z_test()` in [src/agent_runtime/evaluation/statistical_tests.py](../../src/agent_runtime/evaluation/statistical_tests.py)
+- Implemented in: `test_significance()` in [domains/product_analytics/server.py](../../domains/product_analytics/server.py)
 - Domain rule: `statistical_significance_gate` in [domains/product_analytics/policies.py](../../domains/product_analytics/policies.py)

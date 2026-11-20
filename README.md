@@ -113,4 +113,4 @@ Read the complete documentation in `docs/guide/`:
 
 ## 6. License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the MIT License.
