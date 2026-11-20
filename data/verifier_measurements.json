@@ -3,8 +3,8 @@
   "random": {
     "baseline_count": 1018,
     "baseline_pct": 0.509,
-    "current_count": 59,
-    "current_pct": 0.0295
+    "current_count": 33,
+    "current_pct": 0.0165
   },
   "out_of_range": {
     "baseline_count": 67,
@@ -23,15 +23,15 @@
     "trials": 2000,
     "baseline_count": 2000,
     "baseline_pct": 1.0,
-    "current_count": 479,
-    "current_pct": 0.2395
+    "current_count": 248,
+    "current_pct": 0.124
   },
   "relative_changes": {
     "trials": 2000,
     "baseline_count": 2000,
     "baseline_pct": 1.0,
-    "current_count": 1009,
-    "current_pct": 0.5045
+    "current_count": 1038,
+    "current_pct": 0.519
   },
   "entity_swaps": {
     "trials": 6,
@@ -124,8 +124,8 @@
     "baseline_pct": 1.0,
     "prefix_count": 2,
     "prefix_pct": 0.13333333333333333,
-    "current_count": 2,
-    "current_pct": 0.13333333333333333
+    "current_count": 0,
+    "current_pct": 0.0
   },
   "heldout_set3_right": {
     "trials": 15,
@@ -133,7 +133,25 @@
     "baseline_pct": 1.0,
     "prefix_count": 13,
     "prefix_pct": 0.8666666666666667,
-    "current_count": 13,
-    "current_pct": 0.8666666666666667
+    "current_count": 15,
+    "current_pct": 1.0
+  },
+  "heldout_set4_wrong": {
+    "trials": 15,
+    "baseline_count": 15,
+    "baseline_pct": 1.0,
+    "prefix_count": 8,
+    "prefix_pct": 0.5333333333333333,
+    "current_count": 0,
+    "current_pct": 0.0
+  },
+  "heldout_set4_right": {
+    "trials": 15,
+    "baseline_count": 15,
+    "baseline_pct": 1.0,
+    "prefix_count": 13,
+    "prefix_pct": 0.8666666666666667,
+    "current_count": 15,
+    "current_pct": 1.0
   }
 }

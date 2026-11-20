@@ -45,6 +45,11 @@ entity_binding:
     computers: desktop
     mac: desktop
     windows: desktop
+    baseline_week: baseline_week
+    baseline: baseline_week
+    last_week: last_week
+    last: last_week
+    recent: last_week
 
 permit_tools:
   - test_significance

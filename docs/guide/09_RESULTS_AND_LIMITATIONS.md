@@ -23,10 +23,12 @@ All result numbers reflect verified code runs rendered via `scripts/render_readm
   - Development Correct Paraphrases (16 trials): **100.0% accepted** (16/16 accepted, 0% false rejections).
   - Held-out Adversarial Set 3 (pre-fix, 15 trials): **2/15 accepted** (86.7% rejected; period swaps pass).
   - Held-out Correct Claims Set 3 (pre-fix, 15 trials): **2/15 false rejections** (13/15 accepted; shoppers / points fail).
+  - Held-out Adversarial Set 4 (post-fix, 15 trials): **100% rejected** (15/15 rejected; 8/15 passed pre-fix).
+  - Held-out Correct Claims Set 4 (post-fix, 15 trials): **100.0% accepted** (15/15 accepted; 2 false rejections pre-fix).
 - **Synthetic Fabrication Acceptance (6,000 trials):**
   - Plausible-range percentages (2,000 trials): **6.8% accepted** (136/2,000).
-  - Percentage-point gaps (2,000 trials): **23.9% accepted** (479/2,000).
-  - Relative changes (2,000 trials): **50.4% accepted** (1,009/2,000).
+  - Percentage-point gaps (2,000 trials): **12.4% accepted** (248/2,000).
+  - Relative changes (2,000 trials): **51.9% accepted** (1,038/2,000).
 
   Near-miss fabrication acceptance is the verifier's known weakness: plausible-range values that happen to fall near a real ledger entry pass at significant rates, especially relative changes.
 <!-- END_GUIDE09_VERIFIER -->

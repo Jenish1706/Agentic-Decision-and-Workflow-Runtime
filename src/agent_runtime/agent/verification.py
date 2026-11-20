@@ -334,6 +334,12 @@ _DEFAULT_DOMAIN_SYNONYMS: dict[str, str] = {
     "computers": "desktop",
     "mac": "desktop",
     "windows": "desktop",
+    # Periods
+    "baseline": "baseline_week",
+    "baseline_week": "baseline_week",
+    "last": "last_week",
+    "last_week": "last_week",
+    "recent": "last_week",
 }
 _DOMAIN_SYNONYMS = _DEFAULT_DOMAIN_SYNONYMS
 
@@ -414,13 +420,14 @@ _NON_METRIC_PATTERNS = [
 ]
 
 _NUMBER = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?"
-_DECREASE_WORDS = ("fell", "declined", "dropped", "decreased", "lower", "down", "reduced", "drop")
-_INCREASE_WORDS = ("rose", "increased", "grew", "higher", "up", "improved", "gained", "lift", "increase")
+_DECREASE_WORDS = ("fell", "declined", "dropped", "decreased", "lower", "down", "reduced", "drop", "declining", "falling", "dropping", "reducing", "declines", "drops", "falls")
+_INCREASE_WORDS = ("rose", "increased", "grew", "higher", "up", "improved", "gained", "lift", "increase", "lifted", "lifts", "rising", "increasing", "growing")
 
 # The optional leading word (letters only, so it can never swallow a
 # neighbouring number) is read for direction: "fell by 4.2 pp", "rose to 85%".
 _PP_PATTERN = re.compile(
-    rf"(?:([A-Za-z]+)\s+(?:by\s+)?)?({_NUMBER})\s*(?:percentage[ -]points?|pp\b)", re.IGNORECASE
+    rf"(?:([A-Za-z]+)\s+(?:by\s+(?:(?:about|roughly|around)\s+)?)?)?({_NUMBER})\s*(?:percentage[ -]points?|pp\b|points?\b)",
+    re.IGNORECASE,
 )
 _PCT_PATTERN = re.compile(
     rf"(?:([A-Za-z]+)\s+(?:by\s+|to\s+)?)?({_NUMBER})\s*(?:%|percent\b)(?!\s*points?)", re.IGNORECASE
@@ -534,11 +541,21 @@ def extract_quantitative_claims(
         claim_start_in_clause = max(0, start - c_left)
 
         def _expand_tokens(raw_s: str) -> frozenset[str]:
-            raw_tokens = set(re.findall(r"[a-z0-9_-]+", raw_s.lower()))
+            raw_lower = raw_s.lower()
+            raw_tokens = set(re.findall(r"[a-z0-9_-]+", raw_lower))
             expanded = set(raw_tokens)
             for t in raw_tokens:
                 if t in active_synonyms:
                     expanded.add(active_synonyms[t])
+            for phrase, canon in active_synonyms.items():
+                if " " in phrase or "_" in phrase or "-" in phrase:
+                    norm = phrase.replace("_", " ").replace("-", " ")
+                    if norm in raw_lower:
+                        expanded.add(canon)
+            if "baseline week" in raw_lower or "baseline" in raw_tokens:
+                expanded.add("baseline_week")
+            if "last week" in raw_lower or "last" in raw_tokens or "recent" in raw_tokens:
+                expanded.add("last_week")
             return frozenset(expanded)
 
         return s, _expand_tokens(s), _expand_tokens(c_str), c_str, claim_start_in_clause
@@ -817,7 +834,15 @@ def _unit_matches(candidate: float, grounding: _GroundingValue, claim: Quantitat
       "43%".
     - Every other claim compares values directly, with no scaling.
     """
-    if claim.claim_type in ("percentage", "percentage_points"):
+    leaf_lower = grounding.leaf.lower() if grounding.leaf else ""
+    if claim.claim_type == "percentage_points":
+        if grounding.is_ratio and _close(candidate * 100.0, claim.value, claim.tolerance):
+            return True
+        return (grounding.is_percent or "_pp" in leaf_lower) and _close(candidate, claim.value, claim.tolerance)
+    if claim.claim_type == "percentage":
+        # A percentage-point field (e.g. difference_pp) cannot ground a percent claim
+        if "_pp" in leaf_lower:
+            return False
         if grounding.is_ratio and _close(candidate * 100.0, claim.value, claim.tolerance):
             return True
         return grounding.is_percent and _close(candidate, claim.value, claim.tolerance)
@@ -906,7 +931,8 @@ def _find_direction_contradiction(
 _PREDICATE_VERBS_PATTERN = re.compile(
     r"\b(?:converted|was|were|is|are|rose|fell|dropped|declined|grew|increased|improved|slipped|"
     r"held|reached|hit|stood|averaged|totalled|totaled|lifted|generated|represents?|representing|"
-    r"exceeds?|exceeded|beat|gained|remained|stayed|showed)\b",
+    r"exceeds?|exceeded|beat|gained|remained|stayed|showed|maintained|maintains|achieved|recorded|"
+    r"posted|saw|reported|had|yielded)\b",
     re.IGNORECASE,
 )
 
@@ -937,10 +963,12 @@ _NON_ENTITY_WORDS = frozenset({
     "funnel", "metric", "analysis", "treatment", "control", "favor",
     # Metric qualifiers / state verbs
     "started", "completed", "finished", "begun", "total", "one", "day", "week", "month", "year",
+    "maintained", "maintains", "achieved", "recorded", "posted", "saw", "reported", "had", "yielded",
     # Generic entity/qualifier head words that require a specific entity name
-    "users", "user", "visitors", "visitor", "customers", "customer", "channel", "channels",
+    "users", "user", "visitors", "visitor", "customers", "customer", "shoppers", "shopper", "purchasers", "purchaser",
+    "buyers", "buyer", "clients", "client", "borrowers", "borrower", "subscribers", "subscriber", "channel", "channels",
     "segment", "segments", "group", "groups", "audience", "cohort", "cohorts", "device", "devices",
-    "platform", "platforms", "visitors'", "users'", "channel's", "segment's", "device's", "platform's",
+    "platform", "platforms", "visitors'", "users'", "shoppers'", "purchasers'", "buyers'", "channel's", "segment's", "device's", "platform's",
     # Dummy subjects & pronouns & units / metrics / noise
     "there", "here", "it", "they", "we", "he", "she",
     "s", "m", "k", "b", "t", "sec", "second", "seconds", "min", "minute", "minutes", "hr", "hour", "hours",
@@ -955,7 +983,18 @@ _NON_ENTITY_WORDS = frozenset({
 })
 
 
-def _extract_subject_entity_candidates(claim: QuantitativeClaim) -> list[str]:
+_GENERIC_ROLE_NOUNS = frozenset({
+    "shoppers", "shopper", "purchasers", "purchaser", "buyers", "buyer",
+    "visitors", "visitor", "customers", "customer", "users", "user",
+    "clients", "client", "borrowers", "borrower", "subscribers", "subscriber",
+    "audience", "audiences", "cohort", "cohorts", "members", "member",
+    "traffic", "lead", "leads", "people",
+})
+
+def _extract_subject_entity_candidates(
+    claim: QuantitativeClaim,
+    entity_vocab: set[str] | None = None,
+) -> list[str]:
     clause = claim.clause_text or claim.sentence
     if not clause:
         return []
@@ -973,16 +1012,25 @@ def _extract_subject_entity_candidates(claim: QuantitativeClaim) -> list[str]:
 
     verb_matches = list(_PREDICATE_VERBS_PATTERN.finditer(prefix))
     if not verb_matches:
-        if not re.search(r"\b(?:users|visitors|customers|channel|segment|device|devices|platform|platforms|app)\b", prefix, re.IGNORECASE):
+        if not re.search(r"\b(?:users|visitors|customers|shoppers|purchasers|buyers|channel|segment|device|devices|platform|platforms|app)\b", prefix, re.IGNORECASE):
             return []
         subject_str = prefix.strip()
     else:
         subject_str = prefix[:verb_matches[0].start()].strip()
 
+    tokens = [tok for tok in re.findall(r"[a-z0-9_-]+", subject_str.lower()) if not tok.isdigit()]
+
+    # If a known entity is present, generic role nouns (shoppers, purchasers, visitors)
+    # next to it are exempt from being treated as candidate entities.
+    has_known_entity = bool(entity_vocab and any(tok in entity_vocab for tok in tokens))
+
     candidates: list[str] = []
-    for token in re.findall(r"[a-z0-9_-]+", subject_str.lower()):
-        if token not in _NON_ENTITY_WORDS and not token.isdigit():
-            candidates.append(token)
+    for token in tokens:
+        if token in _NON_ENTITY_WORDS:
+            continue
+        if has_known_entity and token in _GENERIC_ROLE_NOUNS:
+            continue
+        candidates.append(token)
 
     return candidates
 
@@ -1047,6 +1095,11 @@ def _entity_and_metric_compatible(
         if len(all_vals) > 1:
             for opp_val in all_vals:
                 if opp_val != val:
+                    # If this claim is the starting value of a movement ("from X to Y" or "down from X"),
+                    # baseline grounding is expected even if the sentence names the target period.
+                    if cat == "period" and val == "baseline_week":
+                        if "from" in claim.raw_text.lower() or re.search(r"\bfrom\s+(?:about\s+|roughly\s+)?[0-9.,]+", claim.sentence, re.IGNORECASE):
+                            continue
                     if opp_val in words and val not in words:
                         return False, f"entity swap: claimed for '{opp_val}' but evidence is for '{val}'"
                     if opp_val in claim.context_words and val not in claim.context_words:
@@ -1128,6 +1181,10 @@ def _match_direct(
     category_values: Mapping[str, set[str]],
 ) -> tuple[str, str] | None:
     for grounding in values:
+        if claim.claim_type == "percentage_points" and grounding.is_ratio:
+            # A raw level ratio (e.g. conversion_rate = 0.028) is a level rate,
+            # not a percentage-point difference; it can only ground pp via _match_derived.
+            continue
         magnitude = abs(grounding.value) if grounding.signed_change and claim.direction else grounding.value
         if not _unit_matches(magnitude, grounding, claim):
             continue
@@ -1251,7 +1308,7 @@ def verify_numerical_grounding(
     entity_vocab = _build_entity_vocabulary(values, active_synonyms, category_values, query=query)
 
     for claim in claims:
-        candidates = _extract_subject_entity_candidates(claim)
+        candidates = _extract_subject_entity_candidates(claim, entity_vocab=entity_vocab)
         unknown_entities = [c for c in candidates if c not in entity_vocab]
         if unknown_entities and (category_values or values):
             explanation = f"Unknown entity '{unknown_entities[0]}' is not in evidence or domain vocabulary"

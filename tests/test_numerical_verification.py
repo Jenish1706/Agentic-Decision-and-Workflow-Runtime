@@ -198,8 +198,8 @@ def test_heldout_correct_paraphrases_sets_1_and_2_accepted():
         assert result.valid, f"Expected correct paraphrase to be accepted: '{probe}', issues: {result.issues}"
 
 
-def test_heldout_set3_pre_fix_behavior():
-    """Verify exact pre-fix behavior on fresh Set 3 probes (2/15 wrong accepted, 2/15 right rejected)."""
+def test_heldout_set3_post_fix_behavior():
+    """Verify post-fix behavior on fresh Set 3 probes (0/15 wrong accepted, 0/15 right rejected)."""
     from scripts.measure_verifier import (
         build_ledger,
         heldout_set3_wrong_claims,
@@ -212,14 +212,27 @@ def test_heldout_set3_pre_fix_behavior():
     wrong_accepted = [s for s in wrong if verify_numerical_grounding(s, ledger).valid]
     right_rejected = [s for s in right if not verify_numerical_grounding(s, ledger).valid]
 
-    # Pre-fix 2ac35ab: 2 wrong accepted (period swaps) and 2 right rejected (shoppers unknown entity, points unit)
-    assert len(wrong_accepted) == 2, f"Expected 2 wrong accepted, got {wrong_accepted}"
-    assert "Mobile conversion was 2.8% last week." in wrong_accepted
-    assert "Mobile conversion increased to 2.8% last week." in wrong_accepted
+    # Post-fix AR-15: 0 wrong accepted and 0 right rejected (period binding, generic role nouns, and points unit)
+    assert len(wrong_accepted) == 0, f"Expected 0 wrong accepted, got {wrong_accepted}"
+    assert len(right_rejected) == 0, f"Expected 0 right rejected, got {right_rejected}"
 
-    assert len(right_rejected) == 2, f"Expected 2 right rejected, got {right_rejected}"
-    assert "Desktop shoppers converted at roughly 4.1% in the baseline week." in right_rejected
-    assert "Mobile conversion fell by about 1.2 points." in right_rejected
+
+def test_heldout_set4_behavior():
+    """Verify held-out Set 4 probes written prior to AR-15 fix (0/15 wrong accepted, 0/15 right rejected)."""
+    from scripts.measure_verifier import (
+        build_ledger,
+        heldout_set4_wrong_claims,
+        heldout_set4_right_claims,
+    )
+    ledger = build_ledger()
+    wrong = heldout_set4_wrong_claims()
+    right = heldout_set4_right_claims()
+
+    wrong_accepted = [s for s in wrong if verify_numerical_grounding(s, ledger).valid]
+    right_rejected = [s for s in right if not verify_numerical_grounding(s, ledger).valid]
+
+    assert len(wrong_accepted) == 0, f"Expected 0 wrong accepted, got {wrong_accepted}"
+    assert len(right_rejected) == 0, f"Expected 0 right rejected, got {right_rejected}"
 
 
 

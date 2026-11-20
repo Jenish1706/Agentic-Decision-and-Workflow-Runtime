@@ -273,6 +273,48 @@ def heldout_set3_right_claims() -> list[str]:
     ]
 
 
+def heldout_set4_wrong_claims() -> list[str]:
+    """Fresh held-out probes written before AR-15 changes (§0.4 Set 4)."""
+    return [
+        "Mobile conversion was 2.8% last week.",
+        "Mobile conversion increased to 2.8% last week.",
+        "Desktop conversion was 4.2% last week.",
+        "In the baseline week, mobile conversion fell to 1.6%.",
+        "In the baseline week, desktop shoppers converted at 1.6%.",
+        "Mobile conversion rose from 2.8% to 1.6%.",
+        "Mobile shoppers converted at 4.1% in the baseline week.",
+        "Mobile conversion fell by 2.8 points.",
+        "One mobile segment started 2,500 checkouts last week.",
+        "Mobile purchasers completed 70 orders last week.",
+        "Console users converted at 2.8%.",
+        "Desktop completed 1,200 purchases in the baseline week.",
+        "Desktop conversion increased to 4.0% in last week's data.",
+        "Variant B increased conversion by 1.33%.",
+        "Mobile completed 34 purchases in the baseline week.",
+    ]
+
+
+def heldout_set4_right_claims() -> list[str]:
+    """Fresh held-out correct claims written before AR-15 changes (§0.4 Set 4)."""
+    return [
+        "Mobile shoppers converted at roughly 2.8% in the baseline week.",
+        "Desktop visitors converted at 4.1% during the baseline week.",
+        "Mobile conversion fell by about 1.2 points.",
+        "The difference between variants was 1.3 points.",
+        "Desktop conversion was about 4.0% last week.",
+        "In the baseline week, mobile converted at 2.8%.",
+        "Mobile conversion dropped to 1.6% last week.",
+        "Desktop customers completed 50 purchases in a baseline week segment.",
+        "Mobile users started 2,700 checkouts last week.",
+        "On mobile, conversion declined from 2.8% in the baseline week to 1.6% last week.",
+        "Mobile purchasers completed 43 checkouts last week.",
+        "Variant B lifted conversion by 1.33 points.",
+        "Desktop shoppers maintained a 4.0% conversion rate last week.",
+        "In the baseline week, desktop checkouts started reached 1,200.",
+        "Variant B converted at 2.9% versus 1.6% for variant A.",
+    ]
+
+
 def load_committed_verifier_measurements() -> dict | None:
     path = ROOT / "data" / "verifier_measurements.json"
     if path.is_file():
@@ -357,6 +399,15 @@ def measure(save_artifact: bool = True) -> dict:
 
     base_h3_right = count_accepted(baseline, h3_right)
     curr_h3_right = count_accepted(current, h3_right)
+
+    h4_wrong = heldout_set4_wrong_claims()
+    h4_right = heldout_set4_right_claims()
+
+    base_h4_wrong = count_accepted(baseline, h4_wrong)
+    curr_h4_wrong = count_accepted(current, h4_wrong)
+
+    base_h4_right = count_accepted(baseline, h4_right)
+    curr_h4_right = count_accepted(current, h4_right)
 
     res = {
         "trials": TRIALS,
@@ -495,6 +546,24 @@ def measure(save_artifact: bool = True) -> dict:
             "prefix_pct": 13 / len(h3_right),
             "current_count": curr_h3_right,
             "current_pct": curr_h3_right / len(h3_right),
+        },
+        "heldout_set4_wrong": {
+            "trials": len(h4_wrong),
+            "baseline_count": base_h4_wrong,
+            "baseline_pct": base_h4_wrong / len(h4_wrong),
+            "prefix_count": 8,
+            "prefix_pct": 8 / len(h4_wrong),
+            "current_count": curr_h4_wrong,
+            "current_pct": curr_h4_wrong / len(h4_wrong),
+        },
+        "heldout_set4_right": {
+            "trials": len(h4_right),
+            "baseline_count": base_h4_right,
+            "baseline_pct": base_h4_right / len(h4_right),
+            "prefix_count": 13,
+            "prefix_pct": 13 / len(h4_right),
+            "current_count": curr_h4_right,
+            "current_pct": curr_h4_right / len(h4_right),
         },
     }
 
