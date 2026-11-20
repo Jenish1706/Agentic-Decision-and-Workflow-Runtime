@@ -39,6 +39,10 @@ entity_binding:
     - "legacy-billing"
     - "recommendation-worker"
     - "payments-service"
+  synonyms:
+    service: service_name
+    system: service_name
+    component: service_name
 
 permit_tools:
   - get_incident_telemetry

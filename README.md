@@ -26,19 +26,22 @@ This runtime enforces a strict trust boundary:
 All tables below are generated directly from verified measurement scripts (`scripts/render_readme.py --check`).
 
 ### Numerical Claim Verification
-Evaluated across 7 categories including 6,000 synthetic trials (plausible shifts, pp gaps, and relative falls) and baseline correct answers (the current verifier accepts 3.9%):
+Evaluated across 7 categories including 6,000 synthetic trials (plausible shifts, pp gaps, and relative falls) and baseline correct answers (the current verifier accepts 2.9%):
 
 <!-- BEGIN_VERIFIER_TABLE -->
 | Verifier Check | Baseline (b13a25d) | Current (Deterministic) |
 |---|---|---|
-| Random fabricated claims accepted (2,000 trials) | 1,018 (50.9%) | 78 (3.9%) |
+| Random fabricated claims accepted (2,000 trials) | 1,018 (50.9%) | 59 (2.9%) |
 | Out-of-range claims accepted (2,000 trials) | 67 (3.4%) | 0 (0.0%) |
-| Plausible-range percentages (1.4-4.3%, 2,000 trials) | 2,000 (100.0%) | 164 (8.2%) |
-| Percentage-point gaps (0.1-3.0 pp, 2,000 trials) | 2,000 (100.0%) | 610 (30.5%) |
-| Relative changes (1-60%, 2,000 trials) | 2,000 (100.0%) | 1,128 (56.4%) |
+| Plausible-range percentages (1.4-4.3%, 2,000 trials) | 2,000 (100.0%) | 136 (6.8%) |
+| Percentage-point gaps (0.1-3.0 pp, 2,000 trials) | 2,000 (100.0%) | 479 (23.9%) |
+| Relative changes (1-60%, 2,000 trials) | 2,000 (100.0%) | 1,009 (50.4%) |
 | Entity swaps accepted (6 trials) | 6 (100.0%) | 0 (0.0%) |
 | Synonym swaps accepted (6 trials) | 6 (100.0%) | 0 (0.0%) |
 | Metric swaps accepted (6 trials) | 5 (83.3%) | 0 (0.0%) |
+| Held-out adversarial probes (Set 1, 20 trials) | 20/20 (100.0%) | 0/20 (0.0%) |
+| Held-out adversarial probes (Set 2, 20 trials) | 20/20 (100.0%) | 0/20 (0.0%) |
+| Held-out correct paraphrases (16 trials) | 16/16 (100.0%) | 16/16 (100.0%) |
 | Direction reversal ("fell" for +1.33 pp) | accepted | rejected |
 | Version number in factual sentence ("iOS 17") | accepted | accepted |
 | Correct answers accepted (3 benchmark cases) | 3/3 (100.0%) | 3/3 (100.0%) |

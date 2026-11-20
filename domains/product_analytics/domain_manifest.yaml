@@ -26,6 +26,25 @@ entity_binding:
   patterns:
     - '(?i)\b(?:(?:experiment|exp)[_\s-]*(?:number|num|no)?[_\s#-]*(\d+)|exp[_\s-]?(\d+))\b'
   prefix: "exp-"
+  synonyms:
+    phone: mobile
+    phones: mobile
+    smartphone: mobile
+    smartphones: mobile
+    cellphone: mobile
+    cellular: mobile
+    ios: mobile
+    android: mobile
+    workstation: desktop
+    workstations: desktop
+    pc: desktop
+    pcs: desktop
+    laptop: desktop
+    laptops: desktop
+    computer: desktop
+    computers: desktop
+    mac: desktop
+    windows: desktop
 
 permit_tools:
   - test_significance

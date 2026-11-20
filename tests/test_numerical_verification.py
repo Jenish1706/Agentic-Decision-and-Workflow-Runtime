@@ -174,3 +174,28 @@ def test_correct_answers_remain_fully_accepted():
         assert res.valid, f"Failed on: '{ans}', issues: {res.issues}"
 
 
+def test_heldout_adversarial_probes_sets_1_and_2_rejected():
+    from scripts.measure_verifier import (
+        build_ledger,
+        heldout_set1_wrong_claims,
+        heldout_set2_wrong_claims,
+    )
+    ledger = build_ledger()
+    for probe in heldout_set1_wrong_claims() + heldout_set2_wrong_claims():
+        result = verify_numerical_grounding(probe, ledger)
+        assert not result.valid, f"Expected held-out probe to be rejected: '{probe}'"
+
+
+def test_heldout_correct_paraphrases_sets_1_and_2_accepted():
+    from scripts.measure_verifier import (
+        build_ledger,
+        heldout_set1_right_claims,
+        heldout_set2_right_claims,
+    )
+    ledger = build_ledger()
+    for probe in heldout_set1_right_claims() + heldout_set2_right_claims():
+        result = verify_numerical_grounding(probe, ledger)
+        assert result.valid, f"Expected correct paraphrase to be accepted: '{probe}', issues: {result.issues}"
+
+
+

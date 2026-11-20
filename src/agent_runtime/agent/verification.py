@@ -303,6 +303,7 @@ class QuantitativeClaim:
     sentence: str = ""
     context_words: frozenset[str] = field(default_factory=frozenset)
     clause_words: frozenset[str] = field(default_factory=frozenset)
+    clause_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -313,7 +314,7 @@ class NumericalVerificationResult:
     issues: list[str] = field(default_factory=list)
 
 
-_DOMAIN_SYNONYMS: dict[str, str] = {
+_DEFAULT_DOMAIN_SYNONYMS: dict[str, str] = {
     # Devices
     "phone": "mobile",
     "phones": "mobile",
@@ -334,6 +335,22 @@ _DOMAIN_SYNONYMS: dict[str, str] = {
     "mac": "desktop",
     "windows": "desktop",
 }
+_DOMAIN_SYNONYMS = _DEFAULT_DOMAIN_SYNONYMS
+
+
+def get_domain_synonyms(custom_synonyms: Mapping[str, str] | None = None) -> Mapping[str, str]:
+    if custom_synonyms is not None:
+        return custom_synonyms
+    try:
+        from ..domains import load_all_domain_synonyms
+        manifest_syns = load_all_domain_synonyms()
+        if manifest_syns:
+            merged = dict(_DEFAULT_DOMAIN_SYNONYMS)
+            merged.update(manifest_syns)
+            return merged
+    except Exception:
+        pass
+    return _DEFAULT_DOMAIN_SYNONYMS
 
 _METRIC_OPPOSITIONS = (
     {
@@ -436,7 +453,24 @@ def _direction_from(word: str | None) -> str | None:
     return None
 
 
-def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
+def _direction_for_claim(leading_word: str | None, clause_text: str, claim_start_in_clause: int) -> str | None:
+    d = _direction_from(leading_word)
+    if d is not None:
+        return d
+    prefix = clause_text[:claim_start_in_clause] if claim_start_in_clause > 0 else clause_text
+    tokens = re.findall(r"[A-Za-z]+", prefix.lower())
+    for t in reversed(tokens):
+        d = _direction_from(t)
+        if d is not None:
+            return d
+    return None
+
+
+def extract_quantitative_claims(
+    text: str,
+    *,
+    synonyms: Mapping[str, str] | None = None,
+) -> list[QuantitativeClaim]:
     """Find every quantitative claim in `text`.
 
     Each span of text is claimed by at most one pattern, checked from most to
@@ -452,8 +486,9 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
 
     claimed = [False] * len(cleaned)
     claims: list[QuantitativeClaim] = []
+    active_synonyms = get_domain_synonyms(synonyms)
 
-    def _sentence_and_clause_words(start: int, end: int) -> tuple[str, frozenset[str], frozenset[str]]:
+    def _sentence_and_clause_words(start: int, end: int) -> tuple[str, frozenset[str], frozenset[str], str, int]:
         def _is_boundary(idx: int) -> bool:
             ch = text[idx]
             if ch in "\n\r?!":
@@ -496,16 +531,17 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
             c_right += 1
 
         c_str = text[c_left:c_right].strip()
+        claim_start_in_clause = max(0, start - c_left)
 
         def _expand_tokens(raw_s: str) -> frozenset[str]:
             raw_tokens = set(re.findall(r"[a-z0-9_-]+", raw_s.lower()))
             expanded = set(raw_tokens)
             for t in raw_tokens:
-                if t in _DOMAIN_SYNONYMS:
-                    expanded.add(_DOMAIN_SYNONYMS[t])
+                if t in active_synonyms:
+                    expanded.add(active_synonyms[t])
             return frozenset(expanded)
 
-        return s, _expand_tokens(s), _expand_tokens(c_str)
+        return s, _expand_tokens(s), _expand_tokens(c_str), c_str, claim_start_in_clause
 
     def _take(match: re.Match[str], number_group: int) -> bool:
         start, end = match.span(number_group)
@@ -518,38 +554,42 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
     for match in _PP_PATTERN.finditer(cleaned):
         if _take(match, 2):
             number = match.group(2)
-            sent, words, c_words = _sentence_and_clause_words(match.start(), match.end())
+            sent, words, c_words, c_str, c_offset = _sentence_and_clause_words(match.start(), match.end())
+            direction = _direction_for_claim(match.group(1), c_str, c_offset)
             claims.append(QuantitativeClaim(
                 raw_text=match.group(0).strip(),
                 value=_parse_number(number),
                 claim_type="percentage_points",
                 tolerance=_rounding_tolerance(number),
-                direction=_direction_from(match.group(1)),
+                direction=direction,
                 sentence=sent,
                 context_words=words,
                 clause_words=c_words,
+                clause_text=c_str,
             ))
 
     for match in _PCT_PATTERN.finditer(cleaned):
         if _take(match, 2):
             number = match.group(2)
-            sent, words, c_words = _sentence_and_clause_words(match.start(), match.end())
+            sent, words, c_words, c_str, c_offset = _sentence_and_clause_words(match.start(), match.end())
+            direction = _direction_for_claim(match.group(1), c_str, c_offset)
             claims.append(QuantitativeClaim(
                 raw_text=match.group(0).strip(),
                 value=_parse_number(number),
                 claim_type="percentage",
                 tolerance=_rounding_tolerance(number),
-                direction=_direction_from(match.group(1)),
+                direction=direction,
                 sentence=sent,
                 context_words=words,
                 clause_words=c_words,
+                clause_text=c_str,
             ))
 
     for match in _CURRENCY_PATTERN.finditer(cleaned):
         if _take(match, 1):
             number = match.group(1)
             multiplier = _SUFFIX_MULTIPLIER.get((match.group(2) or "").lower(), 1.0)
-            sent, words, c_words = _sentence_and_clause_words(match.start(), match.end())
+            sent, words, c_words, c_str, c_offset = _sentence_and_clause_words(match.start(), match.end())
             claims.append(QuantitativeClaim(
                 raw_text=match.group(0).strip(),
                 value=_parse_number(number) * multiplier,
@@ -558,6 +598,7 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
                 sentence=sent,
                 context_words=words,
                 clause_words=c_words,
+                clause_text=c_str,
             ))
 
     for match in _PLAIN_PATTERN.finditer(cleaned):
@@ -570,7 +611,7 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
         if "." not in number and multiplier == 1.0 and value <= 10:
             continue
         _take(match, 1)
-        sent, words, c_words = _sentence_and_clause_words(match.start(), match.end())
+        sent, words, c_words, c_str, c_offset = _sentence_and_clause_words(match.start(), match.end())
         claims.append(QuantitativeClaim(
             raw_text=match.group(0).strip(),
             value=value,
@@ -579,7 +620,10 @@ def extract_quantitative_claims(text: str) -> list[QuantitativeClaim]:
             sentence=sent,
             context_words=words,
             clause_words=c_words,
+            clause_text=c_str,
         ))
+
+    return claims
 
     return claims
 
@@ -788,7 +832,11 @@ def _direction_consistent(value: float, direction: str | None) -> bool:
     return True
 
 
-def _find_direction_contradiction(claim: QuantitativeClaim, values: list[_GroundingValue]) -> str | None:
+def _find_direction_contradiction(
+    claim: QuantitativeClaim,
+    values: list[_GroundingValue],
+    category_values: Mapping[str, set[str]],
+) -> str | None:
     """A directional claim whose magnitude matches a signed change in evidence
     but whose sign is wrong is not merely unsupported - the evidence says the
     opposite. Detected first, so no weaker match can paper over it."""
@@ -801,7 +849,187 @@ def _find_direction_contradiction(claim: QuantitativeClaim, values: list[_Ground
             and not _direction_consistent(grounding.value, claim.direction)
         ):
             return f"evidence {grounding.leaf}={grounding.value:+g} contradicts the claimed {claim.direction}"
+
+    # Check within-sentence "from X to Y" direction
+    range_match = re.search(
+        r"\b(?:from\s+([0-9.,]+%?)\s+(?:down\s+|up\s+)?to\s+([0-9.,]+%?))|"
+        r"\b(?:to\s+([0-9.,]+%?)\s+(?:down\s+|up\s+)?from\s+([0-9.,]+%?))",
+        claim.sentence,
+        re.IGNORECASE,
+    )
+    if range_match:
+        from_str = range_match.group(1) or range_match.group(4)
+        to_str = range_match.group(2) or range_match.group(3)
+        try:
+            from_v = _parse_number(from_str.replace("%", "").strip())
+            to_v = _parse_number(to_str.replace("%", "").strip())
+            delta = to_v - from_v
+            if delta < 0 and claim.direction == "increase":
+                return f"claimed {claim.direction} contradicts movement from {from_str} to {to_str}"
+            if delta > 0 and claim.direction == "decrease":
+                return f"claimed {claim.direction} contradicts movement from {from_str} to {to_str}"
+        except Exception:
+            pass
+
+    # Check level claims against baseline/earlier periods in evidence
+    for grounding in values:
+        if not grounding.signed_change and _unit_matches(grounding.value, grounding, claim):
+            compatible, _ = _entity_and_metric_compatible(claim, grounding, category_values, values)
+            if not compatible:
+                continue
+            g_period = grounding.entity_context.get("period", "")
+            g_device = grounding.entity_context.get("device", "")
+            for other in values:
+                if (
+                    other.leaf == grounding.leaf
+                    and other.entity_context.get("device") == g_device
+                    and other is not grounding
+                ):
+                    o_period = other.entity_context.get("period", "")
+                    if "baseline" in o_period and ("last" in g_period or "current" in g_period):
+                        delta = grounding.value - other.value
+                        if delta < 0 and claim.direction == "increase":
+                            return (
+                                f"evidence shows {grounding.leaf} for '{g_device}' fell from "
+                                f"{other.value:g} in {o_period} to {grounding.value:g} in {g_period}, "
+                                f"contradicting claimed {claim.direction}"
+                            )
+                        if delta > 0 and claim.direction == "decrease":
+                            return (
+                                f"evidence shows {grounding.leaf} for '{g_device}' rose from "
+                                f"{other.value:g} in {o_period} to {grounding.value:g} in {g_period}, "
+                                f"contradicting claimed {claim.direction}"
+                            )
     return None
+
+
+_PREDICATE_VERBS_PATTERN = re.compile(
+    r"\b(?:converted|was|were|is|are|rose|fell|dropped|declined|grew|increased|improved|slipped|"
+    r"held|reached|hit|stood|averaged|totalled|totaled|lifted|generated|represents?|representing|"
+    r"exceeds?|exceeded|beat|gained|remained|stayed|showed)\b",
+    re.IGNORECASE,
+)
+
+_PREPOSITIONAL_OR_ADVERB_FRAGMENT = re.compile(
+    r"^\s*(?:down|up|from|to|by|at|in|on|for|with|without|as|while|whereas|vs|versus|during|before|after|over|under)\s+",
+    re.IGNORECASE,
+)
+
+_NON_ENTITY_WORDS = frozenset({
+    # Stopwords & determiners
+    "the", "a", "an", "this", "that", "these", "those", "its", "our", "their", "all", "each", "any", "every", "some", "my",
+    # Prepositions & conjunctions
+    "on", "in", "for", "at", "by", "from", "to", "across", "with", "without", "under", "over", "about", "and", "or", "of", "as",
+    "between", "among", "against", "versus", "vs", "during", "before", "after", "near", "around", "within", "outside",
+    # Adverbs / qualifiers & directions
+    "just", "only", "about", "nearly", "roughly", "approximately", "around", "also", "already",
+    "down", "up", "lower", "higher", "stable", "steady", "near",
+    # Metric / concept nouns
+    "conversion", "conversions", "rate", "rates", "ratio", "ratios", "score", "scores", "dti", "revenue",
+    "sales", "margin", "margins", "p-value", "p_value", "p", "value", "lift", "difference", "gap",
+    "utilization", "orders", "order", "purchases", "purchase", "checkouts", "checkout", "increase",
+    "amount", "traffic", "percentage", "percent", "pp", "points", "count", "delinquency", "delinquencies",
+    "uptime", "loss", "sla", "penalty", "limit", "results", "result", "change", "data", "status",
+    "improvement", "improvements", "gain", "gains", "drop", "drops", "fall", "falls", "rise", "rises",
+    "reduction", "reductions", "growth", "decline", "declines",
+    # Meta / domain concepts
+    "experiment", "experiments", "exp", "variant", "variants", "test", "tests", "trial", "trials",
+    "funnel", "metric", "analysis", "treatment", "control", "favor",
+    # Metric qualifiers / state verbs
+    "started", "completed", "finished", "begun", "total", "one", "day", "week", "month", "year",
+    # Generic entity/qualifier head words that require a specific entity name
+    "users", "user", "visitors", "visitor", "customers", "customer", "channel", "channels",
+    "segment", "segments", "group", "groups", "audience", "cohort", "cohorts", "device", "devices",
+    "platform", "platforms", "visitors'", "users'", "channel's", "segment's", "device's", "platform's",
+    # Dummy subjects & pronouns & units / metrics / noise
+    "there", "here", "it", "they", "we", "he", "she",
+    "s", "m", "k", "b", "t", "sec", "second", "seconds", "min", "minute", "minutes", "hr", "hour", "hours",
+    "credit", "score", "dti", "debt", "latency", "blast", "radius", "incident", "invoice", "sla", "penalty",
+    "amount", "fee", "cost", "budget", "steps", "step", "total", "count", "num", "number", "id", "profile",
+    "delinquencies", "delinquency", "limit", "ceiling", "floor", "threshold", "ratio", "rate", "rates",
+    "percent", "pct", "pp", "points", "dollars", "dollar", "usd", "cents", "cent", "times", "fold", "x",
+    "result", "results", "ans", "answer", "events", "queries", "query", "rows", "row", "payment",
+    "average", "mean", "median", "sum", "subtotal", "tax", "discrepancy", "worst", "best",
+    "highest", "lowest", "monthly", "weekly", "daily", "annual", "quarterly", "dropoff", "churn",
+    "uptime", "chart", "target", "indicated", "indicates", "but", "so", "plus", "minus",
+})
+
+
+def _extract_subject_entity_candidates(claim: QuantitativeClaim) -> list[str]:
+    clause = claim.clause_text or claim.sentence
+    if not clause:
+        return []
+
+    # If the clause is a prepositional or adverbial fragment, it has no entity subject
+    if _PREPOSITIONAL_OR_ADVERB_FRAGMENT.search(clause):
+        return []
+
+    num_match = re.search(r"[0-9]+(?:\.[0-9]+)?", clause)
+    if num_match:
+        prefix = clause[:num_match.start()]
+    else:
+        claim_idx = clause.find(claim.raw_text)
+        prefix = clause[:claim_idx] if claim_idx > 0 else clause
+
+    verb_matches = list(_PREDICATE_VERBS_PATTERN.finditer(prefix))
+    if not verb_matches:
+        if not re.search(r"\b(?:users|visitors|customers|channel|segment|device|devices|platform|platforms|app)\b", prefix, re.IGNORECASE):
+            return []
+        subject_str = prefix.strip()
+    else:
+        subject_str = prefix[:verb_matches[0].start()].strip()
+
+    candidates: list[str] = []
+    for token in re.findall(r"[a-z0-9_-]+", subject_str.lower()):
+        if token not in _NON_ENTITY_WORDS and not token.isdigit():
+            candidates.append(token)
+
+    return candidates
+
+
+def _build_entity_vocabulary(
+    values: list[_GroundingValue],
+    synonyms: Mapping[str, str],
+    category_values: Mapping[str, set[str]],
+    *,
+    query: str = "",
+) -> set[str]:
+    vocab: set[str] = set()
+
+    for k, v in synonyms.items():
+        vocab.add(k.lower())
+        vocab.add(v.lower())
+        for tok in re.findall(r"[a-z0-9_-]+", k.lower()):
+            vocab.add(tok)
+        for tok in re.findall(r"[a-z0-9_-]+", v.lower()):
+            vocab.add(tok)
+
+    for cat, vals in category_values.items():
+        for val in vals:
+            val_lower = str(val).lower()
+            vocab.add(val_lower)
+            for tok in re.findall(r"[a-z0-9_-]+", val_lower):
+                vocab.add(tok)
+
+    for g in values:
+        if g.leaf:
+            for tok in re.findall(r"[a-z0-9_-]+", g.leaf.lower()):
+                vocab.add(tok)
+        for cat, val in g.entity_context.items():
+            val_lower = str(val).lower()
+            vocab.add(val_lower)
+            for tok in re.findall(r"[a-z0-9_-]+", val_lower):
+                vocab.add(tok)
+
+    vocab.update({
+        "a", "b", "variant a", "variant b", "control", "treatment",
+        "baseline", "last", "week", "month", "day", "current",
+    })
+
+    for tok in re.findall(r"\b[A-Za-z]+(?:[-_][A-Za-z0-9]+)*[-_]\d[A-Za-z0-9-]*\b", query):
+        vocab.add(tok.lower())
+
+    return vocab
 
 
 def _entity_and_metric_compatible(
@@ -847,12 +1075,49 @@ def _entity_and_metric_compatible(
                 opp_name = sorted(rule["opposing_keywords"])[0]
                 return False, f"metric mismatch: claimed for '{opp_name}' but evidence is '{grounding.leaf}'"
 
+    # 2b. Checkouts started vs completed
+    if leaf_lower == "checkouts_started" and ("completed" in words or "finished" in words) and "started" not in words:
+        return False, "metric mismatch: claimed completed checkouts but evidence is checkouts_started"
+    if leaf_lower == "purchases_completed" and "started" in words and "completed" not in words:
+        return False, "metric mismatch: claimed started purchases but evidence is purchases_completed"
+
     # 3. DTI vs credit score check
     if claim.claim_type in ("percentage", "percentage_points"):
         if grounding.leaf:
             if "dti" in leaf_lower or "debt" in leaf_lower:
                 if ("credit" in claim.context_words or "score" in claim.context_words) and "dti" not in claim.context_words and "debt" not in claim.context_words:
                     return False, f"metric mismatch: percentage claim mentions credit/score but evidence is '{grounding.leaf}'"
+            if "score" in leaf_lower or "credit" in leaf_lower:
+                return False, f"metric mismatch: percentage claim cannot match '{grounding.leaf}'"
+
+    # 4. Statistics field binding (p_value vs difference_pp / rates / counts)
+    p_value_in_clause = (
+        "p_value" in claim.clause_words
+        or "p-value" in claim.clause_words
+        or ("p" in claim.clause_words and any(w in claim.clause_words for w in ("value", "val", "level")))
+        or re.search(r"\bp\s*=\s*", claim.clause_text or claim.sentence, re.IGNORECASE) is not None
+    )
+    if p_value_in_clause:
+        if leaf_lower != "p_value":
+            return False, f"metric mismatch: claim is for p-value but evidence is '{grounding.leaf}'"
+    elif leaf_lower == "p_value":
+        p_in_context = "p_value" in claim.context_words or "p-value" in claim.context_words or "p" in claim.context_words
+        if not p_in_context:
+            return False, "metric mismatch: evidence is p_value but claim does not refer to p-value"
+
+    # 5. Variant superiority check (e.g. 'A beat B')
+    if "beat" in claim.clause_words or "ahead" in claim.clause_words or "outperformed" in claim.clause_words:
+        m_beat = re.search(
+            r"\b(?:variant\s+)?([ab])\s+(?:beat|ahead of|outperformed)\s+(?:variant\s+)?([ab])\b",
+            claim.clause_text or claim.sentence,
+            re.IGNORECASE,
+        )
+        if m_beat:
+            winner, loser = m_beat.group(1).lower(), m_beat.group(2).lower()
+            w_rate = next((g.value for g in all_values if g.entity_context.get("variant") == winner and "rate" in g.leaf), None)
+            l_rate = next((g.value for g in all_values if g.entity_context.get("variant") == loser and "rate" in g.leaf), None)
+            if w_rate is not None and l_rate is not None and w_rate <= l_rate:
+                return False, f"variant superiority inverted: claimed {winner} beat {loser}, but evidence shows {winner}={w_rate:g} <= {loser}={l_rate:g}"
 
     return True, ""
 
@@ -956,6 +1221,7 @@ def verify_numerical_grounding(
     *,
     query: str = "",
     reference_values: Mapping[str, float] | None = None,
+    domain_synonyms: Mapping[str, str] | None = None,
 ) -> NumericalVerificationResult:
     """Check every quantitative claim in `answer` against evidence.
 
@@ -963,7 +1229,8 @@ def verify_numerical_grounding(
     are declared policy thresholds (PolicyEngine.thresholds) so an answer may
     explain a rule ("exceeds the 43% ceiling") without being rejected.
     """
-    claims = extract_quantitative_claims(answer)
+    active_synonyms = get_domain_synonyms(domain_synonyms)
+    claims = extract_quantitative_claims(answer, synonyms=active_synonyms)
     # Refusals get no exemption here. This used to return valid for any answer
     # containing a refusal phrase, so "Revenue was $9,999,999; the OS breakdown
     # is not available." skipped the check entirely. A genuine refusal has no
@@ -981,8 +1248,30 @@ def verify_numerical_grounding(
         for cat, val in g.entity_context.items():
             category_values.setdefault(cat, set()).add(val)
 
+    entity_vocab = _build_entity_vocabulary(values, active_synonyms, category_values, query=query)
+
     for claim in claims:
-        contradiction = _find_direction_contradiction(claim, values)
+        candidates = _extract_subject_entity_candidates(claim)
+        unknown_entities = [c for c in candidates if c not in entity_vocab]
+        if unknown_entities and (category_values or values):
+            explanation = f"Unknown entity '{unknown_entities[0]}' is not in evidence or domain vocabulary"
+            unverified.append(QuantitativeClaim(
+                raw_text=claim.raw_text,
+                value=claim.value,
+                claim_type=claim.claim_type,
+                tolerance=claim.tolerance,
+                direction=claim.direction,
+                is_verified=False,
+                explanation=explanation,
+                sentence=claim.sentence,
+                context_words=claim.context_words,
+                clause_words=claim.clause_words,
+                clause_text=claim.clause_text,
+            ))
+            issues.append(f"Unsubstantiated numerical claim '{claim.raw_text}': {explanation}")
+            continue
+
+        contradiction = _find_direction_contradiction(claim, values, category_values)
         match = None if contradiction else (
             _match_direct(claim, values, category_values) or _match_derived(claim, values, category_values)
         )
@@ -997,6 +1286,10 @@ def verify_numerical_grounding(
                 is_verified=True,
                 matched_evidence_id=evidence_id,
                 explanation=explanation,
+                sentence=claim.sentence,
+                context_words=claim.context_words,
+                clause_words=claim.clause_words,
+                clause_text=claim.clause_text,
             ))
             continue
         if contradiction:
@@ -1013,6 +1306,10 @@ def verify_numerical_grounding(
             direction=claim.direction,
             is_verified=False,
             explanation=explanation,
+            sentence=claim.sentence,
+            context_words=claim.context_words,
+            clause_words=claim.clause_words,
+            clause_text=claim.clause_text,
         ))
         issues.append(f"Unsubstantiated numerical claim '{claim.raw_text}' ({claim.value:g})")
 

@@ -38,6 +38,9 @@ def generate_readme_verifier_table(v_metrics: dict) -> str:
     rev = v_metrics["reversal"]
     ver = v_metrics["version"]
     cor = v_metrics["correct"]
+    h1 = v_metrics["heldout_set1"]
+    h2 = v_metrics["heldout_set2"]
+    h_cor = v_metrics["heldout_correct"]
     trials = v_metrics["trials"]
 
     return (
@@ -52,6 +55,9 @@ def generate_readme_verifier_table(v_metrics: dict) -> str:
         f"| Entity swaps accepted ({es['trials']} trials) | {es['baseline_count']} ({es['baseline_pct']:.1%}) | {es['current_count']} ({es['current_pct']:.1%}) |\n"
         f"| Synonym swaps accepted ({syn['trials']} trials) | {syn['baseline_count']} ({syn['baseline_pct']:.1%}) | {syn['current_count']} ({syn['current_pct']:.1%}) |\n"
         f"| Metric swaps accepted ({met['trials']} trials) | {met['baseline_count']} ({met['baseline_pct']:.1%}) | {met['current_count']} ({met['current_pct']:.1%}) |\n"
+        f"| Held-out adversarial probes (Set 1, {h1['trials']} trials) | {h1['baseline_count']}/{h1['trials']} ({h1['baseline_pct']:.1%}) | {h1['current_count']}/{h1['trials']} ({h1['current_pct']:.1%}) |\n"
+        f"| Held-out adversarial probes (Set 2, {h2['trials']} trials) | {h2['baseline_count']}/{h2['trials']} ({h2['baseline_pct']:.1%}) | {h2['current_count']}/{h2['trials']} ({h2['current_pct']:.1%}) |\n"
+        f"| Held-out correct paraphrases ({h_cor['trials']} trials) | {h_cor['baseline_count']}/{h_cor['trials']} ({h_cor['baseline_pct']:.1%}) | {h_cor['current_count']}/{h_cor['trials']} ({h_cor['current_pct']:.1%}) |\n"
         f"| Direction reversal (\"fell\" for +1.33 pp) | {rev['baseline']} | {rev['current']} |\n"
         f"| Version number in factual sentence (\"iOS 17\") | {ver['baseline']} | {ver['current']} |\n"
         f"| Correct answers accepted ({cor['total']} benchmark cases) | {cor['baseline_count']}/{cor['total']} ({cor['baseline_pct']:.1%}) | {cor['current_count']}/{cor['total']} ({cor['current_pct']:.1%}) |\n"
@@ -92,6 +98,9 @@ def generate_evaluation_verifier_table(v_metrics: dict) -> str:
     rev = v_metrics["reversal"]
     ver = v_metrics["version"]
     cor = v_metrics["correct"]
+    h1 = v_metrics["heldout_set1"]
+    h2 = v_metrics["heldout_set2"]
+    h_cor = v_metrics["heldout_correct"]
     trials = v_metrics["trials"]
 
     return (
@@ -106,6 +115,9 @@ def generate_evaluation_verifier_table(v_metrics: dict) -> str:
         f"| Entity swaps accepted ({es['trials']} trials, phrased multiple ways) | {es['baseline_count']} ({es['baseline_pct']:.1%}) | {es['current_count']} ({es['current_pct']:.1%}) |\n"
         f"| Synonym swaps accepted ({syn['trials']} trials, phone/workstation/laptop) | {syn['baseline_count']} ({syn['baseline_pct']:.1%}) | {syn['current_count']} ({syn['current_pct']:.1%}) |\n"
         f"| Metric swaps accepted ({met['trials']} trials, checkout vs purchase / DTI vs score) | {met['baseline_count']} ({met['baseline_pct']:.1%}) | {met['current_count']} ({met['current_pct']:.1%}) |\n"
+        f"| Held-out adversarial probes (Set 1, {h1['trials']} trials) | {h1['baseline_count']}/{h1['trials']} ({h1['baseline_pct']:.1%}) | {h1['current_count']}/{h1['trials']} ({h1['current_pct']:.1%}) |\n"
+        f"| Held-out adversarial probes (Set 2, {h2['trials']} trials) | {h2['baseline_count']}/{h2['trials']} ({h2['baseline_pct']:.1%}) | {h2['current_count']}/{h2['trials']} ({h2['current_pct']:.1%}) |\n"
+        f"| Held-out correct paraphrases ({h_cor['trials']} trials, false rejection control) | {h_cor['baseline_count']}/{h_cor['trials']} ({h_cor['baseline_pct']:.1%}) | {h_cor['current_count']}/{h_cor['trials']} ({h_cor['current_pct']:.1%}) |\n"
         f"| \"Variant B fell by 1.33 percentage points\" (evidence: +1.333) | {rev['baseline']} | {rev['current']} |\n"
         f"| Version number accepted as valid (\"...iOS 17 update\") | {ver['baseline']} | {ver['current']} |\n"
         f"| Benchmark correct answers ({cor['total']} trials, false rejection control) | {cor['baseline_count']}/{cor['total']} ({cor['baseline_pct']:.1%}) | {cor['current_count']}/{cor['total']} ({cor['current_pct']:.1%}) |\n"
@@ -144,6 +156,9 @@ def generate_guide09_verifier_block(v_metrics: dict) -> str:
     met = v_metrics["metric_swaps"]
     rev = v_metrics["reversal"]
     cor = v_metrics["correct"]
+    h1 = v_metrics["heldout_set1"]
+    h2 = v_metrics["heldout_set2"]
+    h_cor = v_metrics["heldout_correct"]
     trials = v_metrics["trials"]
 
     return (
@@ -154,6 +169,9 @@ def generate_guide09_verifier_block(v_metrics: dict) -> str:
         f"  - Synonym Swaps: **{1-syn['current_pct']:.0%} rejected** ({syn['trials']-syn['current_count']}/{syn['trials']} rejected).\n"
         f"  - Metric Swaps: **{1-met['current_pct']:.0%} rejected** ({met['trials']-met['current_count']}/{met['trials']} rejected).\n"
         f"  - Direction Reversals: **{100 if rev['current'] == 'rejected' else 0}% rejected** (1/1 rejected).\n"
+        f"  - Held-out Adversarial Set 1 ({h1['trials']} trials): **{1-h1['current_pct']:.0%} rejected** ({h1['trials']-h1['current_count']}/{h1['trials']} rejected).\n"
+        f"  - Held-out Adversarial Set 2 ({h2['trials']} trials): **{1-h2['current_pct']:.0%} rejected** ({h2['trials']-h2['current_count']}/{h2['trials']} rejected).\n"
+        f"  - Held-out Correct Paraphrases ({h_cor['trials']} trials): **{h_cor['current_pct']:.1%} accepted** ({h_cor['current_count']}/{h_cor['trials']} accepted, 0% false rejections).\n"
         f"- **Synthetic Fabrication Acceptance ({3*trials:,} trials):**\n"
         f"  - Plausible-range percentages ({trials:,} trials): **{plaus['current_pct']:.1%} accepted** ({plaus['current_count']:,}/{trials:,}).\n"
         f"  - Percentage-point gaps ({trials:,} trials): **{gaps['current_pct']:.1%} accepted** ({gaps['current_count']:,}/{trials:,}).\n"

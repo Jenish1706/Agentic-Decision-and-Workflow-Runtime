@@ -146,6 +146,82 @@ def relative_change_claims() -> list[str]:
     return [f"Conversion fell {rng.randint(1, 60)}%." for _ in range(TRIALS)]
 
 
+def heldout_set1_wrong_claims() -> list[str]:
+    return [
+        "iPhone users converted at 4.1%.",
+        "Tablet conversion was 4.2%.",
+        "Handset conversion was 4.0%.",
+        "The app converted at 4.1% last week.",
+        "The web channel converted at 1.6% last week.",
+        "The p-value was 1.33.",
+        "Mobile conversion rose to 1.6% last week.",
+        "Mobile conversion improved from 2.8% to 1.6%.",
+        "Conversion on mobile devices was 4.1%.",
+        "Desktop's rate was 2.8% last week.",
+        "Mobile orders reached 2,650 in a day.",
+        "Variant A converted at 2.9% vs 1.6% for B.",
+        "iPad users converted at 4.0%.",
+        "Android app conversion was 2.8%.",
+        "The kiosk segment converted at 1.6%.",
+        "Desktop conversion grew to 1.6% last week.",
+        "The statistical p-value reached 2.9%.",
+        "Purchases completed on mobile reached 2,700.",
+        "The difference between variants was 0.014 pp.",
+        "Desktop conversion fell from 1.6% to 4.0%.",
+    ]
+
+
+def heldout_set1_right_claims() -> list[str]:
+    return [
+        "On mobile, conversion fell from 2.8% to 1.6% last week.",
+        "Desktop conversion held steady at about 4.0%.",
+        "Mobile users converted at 1.6% last week, down from 2.8%.",
+        "The mobile conversion rate dropped by 1.2 percentage points.",
+        "Variant B lifted conversion by 1.33 pp to 2.9% (p = 0.014).",
+        "Phone conversion fell to 1.6%.",
+        "Mobile checkouts started reached 2,700 in last week's data.",
+        "Variant A converted at 1.6% while Variant B reached 2.9%.",
+    ]
+
+
+def heldout_set2_wrong_claims() -> list[str]:
+    return [
+        "SmartTV conversion reached 4.1%.",
+        "Linux workstation conversion was 2.8%.",
+        "ChromeOS users converted at 1.6%.",
+        "The retail channel converted at 4.0%.",
+        "Wearable visitors converted at 2.8%.",
+        "Windows PC conversion dropped to 1.6%.",
+        "Mac users converted at 2.8% in baseline week.",
+        "Mobile conversion increased to 1.6%.",
+        "Desktop conversion fell to 4.1% from 2.8%.",
+        "The test p-value was 1.33 percentage points.",
+        "Variant B showed a p-value of 2.93%.",
+        "Mobile purchases completed were 2,600.",
+        "Desktop checkouts started were 53.",
+        "Variant A beat Variant B by 1.33 pp.",
+        "Credit score reached 43% on the profile.",
+        "The bot traffic segment converted at 1.6%.",
+        "The mobile checkout rate improved from 2.8% to 1.6%.",
+        "In-store conversion stood at 4.1%.",
+        "The significance p-value was 0.029.",
+        "Phone checkouts completed reached 2,500.",
+    ]
+
+
+def heldout_set2_right_claims() -> list[str]:
+    return [
+        "Mobile checkout conversion dropped to 1.6% last week.",
+        "PC conversion remained stable near 4.1%.",
+        "Mobile checkouts completed were 43 on one day last week.",
+        "The gap between variants was 1.33 pp in favor of treatment.",
+        "Smartphone conversion slipped by 1.2 percentage points.",
+        "Desktop purchases completed reached 50 in baseline week.",
+        "The experiment p-value was 0.014.",
+        "Laptop users converted at 4.0%.",
+    ]
+
+
 def correct_answers() -> list[str]:
     return [
         "Mobile conversion dropped from 2.8% to 1.6% last week.",
@@ -205,6 +281,20 @@ def measure() -> dict:
 
     base_correct = count_accepted(baseline, cor_answers)
     curr_correct = count_accepted(current, cor_answers)
+
+    h1_wrong = heldout_set1_wrong_claims()
+    h1_right = heldout_set1_right_claims()
+    h2_wrong = heldout_set2_wrong_claims()
+    h2_right = heldout_set2_right_claims()
+
+    base_h1 = count_accepted(baseline, h1_wrong)
+    curr_h1 = count_accepted(current, h1_wrong)
+
+    base_h2 = count_accepted(baseline, h2_wrong)
+    curr_h2 = count_accepted(current, h2_wrong)
+
+    base_h_cor = count_accepted(baseline, h1_right + h2_right)
+    curr_h_cor = count_accepted(current, h1_right + h2_right)
 
     return {
         "trials": TRIALS,
@@ -284,6 +374,27 @@ def measure() -> dict:
             "current_count": curr_correct,
             "current_pct": curr_correct / len(cor_answers),
         },
+        "heldout_set1": {
+            "trials": len(h1_wrong),
+            "baseline_count": base_h1,
+            "baseline_pct": base_h1 / len(h1_wrong),
+            "current_count": curr_h1,
+            "current_pct": curr_h1 / len(h1_wrong),
+        },
+        "heldout_set2": {
+            "trials": len(h2_wrong),
+            "baseline_count": base_h2,
+            "baseline_pct": base_h2 / len(h2_wrong),
+            "current_count": curr_h2,
+            "current_pct": curr_h2 / len(h2_wrong),
+        },
+        "heldout_correct": {
+            "trials": len(h1_right) + len(h2_right),
+            "baseline_count": base_h_cor,
+            "baseline_pct": base_h_cor / (len(h1_right) + len(h2_right)),
+            "current_count": curr_h_cor,
+            "current_pct": curr_h_cor / (len(h1_right) + len(h2_right)),
+        },
     }
 
 
@@ -300,6 +411,9 @@ def main() -> None:
     rev = results["reversal"]
     ver = results["version"]
     cor = results["correct"]
+    h1 = results["heldout_set1"]
+    h2 = results["heldout_set2"]
+    h_cor = results["heldout_correct"]
 
     print(f"Random fabricated claims accepted:  baseline {r['baseline_count']}/{results['trials']} ({r['baseline_pct']:.1%})"
           f"   current {r['current_count']}/{results['trials']} ({r['current_pct']:.1%})")
@@ -317,6 +431,12 @@ def main() -> None:
           f"   current {syn['current_count']}/{syn['trials']} ({syn['current_pct']:.1%})")
     print(f"Metric swaps accepted:              baseline {met['baseline_count']}/{met['trials']} ({met['baseline_pct']:.1%})"
           f"   current {met['current_count']}/{met['trials']} ({met['current_pct']:.1%})")
+    print(f"Held-out Set 1 wrong accepted:      baseline {h1['baseline_count']}/{h1['trials']} ({h1['baseline_pct']:.1%})"
+          f"   current {h1['current_count']}/{h1['trials']} ({h1['current_pct']:.1%})")
+    print(f"Held-out Set 2 wrong accepted:      baseline {h2['baseline_count']}/{h2['trials']} ({h2['baseline_pct']:.1%})"
+          f"   current {h2['current_count']}/{h2['trials']} ({h2['current_pct']:.1%})")
+    print(f"Held-out correct paraphrases:       baseline {h_cor['baseline_count']}/{h_cor['trials']} ({h_cor['baseline_pct']:.1%})"
+          f"   current {h_cor['current_count']}/{h_cor['trials']} ({h_cor['current_pct']:.1%})")
 
     print(f"Direction reversal accepted:        baseline {rev['baseline'] == 'accepted'}"
           f"   current {rev['current'] == 'accepted'}")
@@ -326,7 +446,7 @@ def main() -> None:
 
     print(f"Correct answers accepted:           baseline {cor['baseline_count']}/{cor['total']} ({cor['baseline_pct']:.1%})"
           f"   current {cor['current_count']}/{cor['total']} ({cor['current_pct']:.1%})")
-    sys.exit(0 if cor['current_count'] == cor['total'] else 1)
+    sys.exit(0 if cor['current_count'] == cor['total'] and h_cor['current_count'] == h_cor['trials'] else 1)
 
 
 if __name__ == "__main__":

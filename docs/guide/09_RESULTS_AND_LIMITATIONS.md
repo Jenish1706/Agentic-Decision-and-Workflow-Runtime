@@ -18,10 +18,13 @@ All result numbers reflect verified code runs rendered via `scripts/render_readm
   - Synonym Swaps: **100% rejected** (6/6 rejected).
   - Metric Swaps: **100% rejected** (6/6 rejected).
   - Direction Reversals: **100% rejected** (1/1 rejected).
+  - Held-out Adversarial Set 1 (20 trials): **100% rejected** (20/20 rejected).
+  - Held-out Adversarial Set 2 (20 trials): **100% rejected** (20/20 rejected).
+  - Held-out Correct Paraphrases (16 trials): **100.0% accepted** (16/16 accepted, 0% false rejections).
 - **Synthetic Fabrication Acceptance (6,000 trials):**
-  - Plausible-range percentages (2,000 trials): **8.2% accepted** (164/2,000).
-  - Percentage-point gaps (2,000 trials): **30.5% accepted** (610/2,000).
-  - Relative changes (2,000 trials): **56.4% accepted** (1,128/2,000).
+  - Plausible-range percentages (2,000 trials): **6.8% accepted** (136/2,000).
+  - Percentage-point gaps (2,000 trials): **23.9% accepted** (479/2,000).
+  - Relative changes (2,000 trials): **50.4% accepted** (1,009/2,000).
 
   Near-miss fabrication acceptance is the verifier's known weakness: plausible-range values that happen to fall near a real ledger entry pass at significant rates, especially relative changes.
 <!-- END_GUIDE09_VERIFIER -->

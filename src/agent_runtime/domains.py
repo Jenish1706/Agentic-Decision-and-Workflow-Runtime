@@ -124,6 +124,22 @@ def list_domains() -> list[str]:
     return sorted(path.parent.name for path in DOMAINS_DIR.glob(f"*/{MANIFEST_NAME}"))
 
 
+@cache
+def load_all_domain_synonyms() -> dict[str, str]:
+    """Aggregate entity synonyms from all domain manifests."""
+    synonyms: dict[str, str] = {}
+    for d_name in list_domains():
+        try:
+            spec = load_domain(d_name)
+            syn_map = spec.entity_binding.get("synonyms")
+            if isinstance(syn_map, Mapping):
+                for k, v in syn_map.items():
+                    synonyms[str(k).lower()] = str(v).lower()
+        except Exception:
+            continue
+    return synonyms
+
+
 def _require_text(manifest: Mapping, key: str, manifest_path: Path) -> str:
     value = manifest.get(key)
     if not isinstance(value, str) or not value.strip():
@@ -192,6 +208,11 @@ def load_domain(name: str) -> DomainSpec:
         entity_binding_dict["target_params"] = tuple(str(k) for k in entity_binding_dict["target_params"])
     elif "target_param" in entity_binding_dict:
         entity_binding_dict["target_params"] = (str(entity_binding_dict["target_param"]),)
+
+    if "synonyms" in entity_binding_dict:
+        if not isinstance(entity_binding_dict["synonyms"], Mapping):
+            raise DomainConfigError(f"{manifest_path}: 'synonyms' must be a mapping.")
+        entity_binding_dict["synonyms"] = {str(k).lower(): str(v).lower() for k, v in entity_binding_dict["synonyms"].items()}
 
     raw_permit_tools = manifest.get("permit_tools") or []
     if not isinstance(raw_permit_tools, (list, tuple)):

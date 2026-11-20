@@ -31,6 +31,11 @@ entity_binding:
   patterns:
     - '(?i)\b(?:(?:acct|account|customer|applicant)(?:[_\s]+(?:on|for)[_\s]+(?:the[_\s]+)?account)?[_\s-]*(?:number|num|no)?[_\s#-]*(\d+)|acct[_\s-]?(\d+))\b'
   prefix: "acct-"
+  synonyms:
+    borrower: account
+    applicant: account
+    customer: account
+    client: account
 
 permit_tools:
   - get_account_profile
