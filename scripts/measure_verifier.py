@@ -9,6 +9,7 @@ Run: uv run python scripts/measure_verifier.py
 """
 
 import importlib.util
+import json
 import random
 import subprocess
 import sys
@@ -230,7 +231,59 @@ def correct_answers() -> list[str]:
     ]
 
 
-def measure() -> dict:
+def heldout_set3_wrong_claims() -> list[str]:
+    """Fresh held-out probes written before any AR-15 changes (§0.4 Set 3)."""
+    return [
+        "In the baseline week, mobile converted at 4.1%.",
+        "Last week desktop conversion dropped to 1.6%.",
+        "Desktop conversion fell from 4.0% to 2.8%.",
+        "Mobile held at 4.0% last week.",
+        "Mobile conversion increased to 2.8% last week.",
+        "Smartphone conversion was 4.0%.",
+        "Laptop conversion was 1.6% last week.",
+        "Desktop completed 73 purchases in a segment last week.",
+        "A desktop segment started 2,700 checkouts.",
+        "Variant A converted at 2.9%.",
+        "The p-value was 0.028.",
+        "Mobile conversion fell by 4.1 points.",
+        "Desktop conversion rose by 1.2 points.",
+        "Mobile conversion was 2.8% last week.",
+        "Kiosk users converted at 2.8%.",
+    ]
+
+
+def heldout_set3_right_claims() -> list[str]:
+    """Fresh held-out correct claims written before any AR-15 changes (§0.4 Set 3)."""
+    return [
+        "Desktop shoppers converted at roughly 4.1% in the baseline week.",
+        "In the baseline week, desktop converted at 4.1%.",
+        "Desktop converted at about 4% in both weeks.",
+        "Last week desktop conversion was 4.0%.",
+        "Mobile conversion was 2.8% in the baseline week.",
+        "For mobile, the baseline conversion rate was 2.8%.",
+        "Mobile's conversion rate last week was about 1.6%.",
+        "Conversion on mobile dropped to 1.6% last week.",
+        "Mobile conversion declined from 2.8% to 1.6%.",
+        "Desktop held at 4.0% while mobile fell to 1.6%.",
+        "One mobile segment started 2,700 checkouts last week.",
+        "A mobile segment completed 43 purchases last week.",
+        "Variant B converted at 2.9% versus 1.6% for variant A.",
+        "The test was significant (p = 0.014).",
+        "Mobile conversion fell by about 1.2 points.",
+    ]
+
+
+def load_committed_verifier_measurements() -> dict | None:
+    path = ROOT / "data" / "verifier_measurements.json"
+    if path.is_file():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+    return None
+
+
+def measure(save_artifact: bool = True) -> dict:
     baseline = load_baseline_verifier()
     ledger = build_ledger()
 
@@ -296,7 +349,16 @@ def measure() -> dict:
     base_h_cor = count_accepted(baseline, h1_right + h2_right)
     curr_h_cor = count_accepted(current, h1_right + h2_right)
 
-    return {
+    h3_wrong = heldout_set3_wrong_claims()
+    h3_right = heldout_set3_right_claims()
+
+    base_h3_wrong = count_accepted(baseline, h3_wrong)
+    curr_h3_wrong = count_accepted(current, h3_wrong)
+
+    base_h3_right = count_accepted(baseline, h3_right)
+    curr_h3_right = count_accepted(current, h3_right)
+
+    res = {
         "trials": TRIALS,
         "random": {
             "baseline_count": base_r,
@@ -374,6 +436,27 @@ def measure() -> dict:
             "current_count": curr_correct,
             "current_pct": curr_correct / len(cor_answers),
         },
+        "dev_probes_set1": {
+            "trials": len(h1_wrong),
+            "baseline_count": base_h1,
+            "baseline_pct": base_h1 / len(h1_wrong),
+            "current_count": curr_h1,
+            "current_pct": curr_h1 / len(h1_wrong),
+        },
+        "dev_probes_set2": {
+            "trials": len(h2_wrong),
+            "baseline_count": base_h2,
+            "baseline_pct": base_h2 / len(h2_wrong),
+            "current_count": curr_h2,
+            "current_pct": curr_h2 / len(h2_wrong),
+        },
+        "dev_probes_correct": {
+            "trials": len(h1_right) + len(h2_right),
+            "baseline_count": base_h_cor,
+            "baseline_pct": base_h_cor / (len(h1_right) + len(h2_right)),
+            "current_count": curr_h_cor,
+            "current_pct": curr_h_cor / (len(h1_right) + len(h2_right)),
+        },
         "heldout_set1": {
             "trials": len(h1_wrong),
             "baseline_count": base_h1,
@@ -395,7 +478,35 @@ def measure() -> dict:
             "current_count": curr_h_cor,
             "current_pct": curr_h_cor / (len(h1_right) + len(h2_right)),
         },
+        "heldout_set3_wrong": {
+            "trials": len(h3_wrong),
+            "baseline_count": base_h3_wrong,
+            "baseline_pct": base_h3_wrong / len(h3_wrong),
+            "prefix_count": 2,
+            "prefix_pct": 2 / len(h3_wrong),
+            "current_count": curr_h3_wrong,
+            "current_pct": curr_h3_wrong / len(h3_wrong),
+        },
+        "heldout_set3_right": {
+            "trials": len(h3_right),
+            "baseline_count": base_h3_right,
+            "baseline_pct": base_h3_right / len(h3_right),
+            "prefix_count": 13,
+            "prefix_pct": 13 / len(h3_right),
+            "current_count": curr_h3_right,
+            "current_pct": curr_h3_right / len(h3_right),
+        },
     }
+
+    if save_artifact:
+        artifact_path = ROOT / "data" / "verifier_measurements.json"
+        try:
+            artifact_path.parent.mkdir(parents=True, exist_ok=True)
+            artifact_path.write_text(json.dumps(res, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    return res
 
 
 def main() -> None:

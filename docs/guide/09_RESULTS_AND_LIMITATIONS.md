@@ -18,9 +18,11 @@ All result numbers reflect verified code runs rendered via `scripts/render_readm
   - Synonym Swaps: **100% rejected** (6/6 rejected).
   - Metric Swaps: **100% rejected** (6/6 rejected).
   - Direction Reversals: **100% rejected** (1/1 rejected).
-  - Held-out Adversarial Set 1 (20 trials): **100% rejected** (20/20 rejected).
-  - Held-out Adversarial Set 2 (20 trials): **100% rejected** (20/20 rejected).
-  - Held-out Correct Paraphrases (16 trials): **100.0% accepted** (16/16 accepted, 0% false rejections).
+  - Development Adversarial Set 1 (used while building fix, 20 trials): **100% rejected** (20/20 rejected).
+  - Development Adversarial Set 2 (used while building fix, 20 trials): **100% rejected** (20/20 rejected).
+  - Development Correct Paraphrases (16 trials): **100.0% accepted** (16/16 accepted, 0% false rejections).
+  - Held-out Adversarial Set 3 (pre-fix, 15 trials): **2/15 accepted** (86.7% rejected; period swaps pass).
+  - Held-out Correct Claims Set 3 (pre-fix, 15 trials): **2/15 false rejections** (13/15 accepted; shoppers / points fail).
 - **Synthetic Fabrication Acceptance (6,000 trials):**
   - Plausible-range percentages (2,000 trials): **6.8% accepted** (136/2,000).
   - Percentage-point gaps (2,000 trials): **23.9% accepted** (479/2,000).

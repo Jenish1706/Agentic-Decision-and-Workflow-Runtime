@@ -1,0 +1,139 @@
+{
+  "trials": 2000,
+  "random": {
+    "baseline_count": 1018,
+    "baseline_pct": 0.509,
+    "current_count": 59,
+    "current_pct": 0.0295
+  },
+  "out_of_range": {
+    "baseline_count": 67,
+    "baseline_pct": 0.0335,
+    "current_count": 0,
+    "current_pct": 0.0
+  },
+  "plausible_pct": {
+    "trials": 2000,
+    "baseline_count": 2000,
+    "baseline_pct": 1.0,
+    "current_count": 136,
+    "current_pct": 0.068
+  },
+  "pp_gaps": {
+    "trials": 2000,
+    "baseline_count": 2000,
+    "baseline_pct": 1.0,
+    "current_count": 479,
+    "current_pct": 0.2395
+  },
+  "relative_changes": {
+    "trials": 2000,
+    "baseline_count": 2000,
+    "baseline_pct": 1.0,
+    "current_count": 1009,
+    "current_pct": 0.5045
+  },
+  "entity_swaps": {
+    "trials": 6,
+    "baseline_count": 6,
+    "baseline_pct": 1.0,
+    "current_count": 0,
+    "current_pct": 0.0
+  },
+  "swaps": {
+    "trials": 6,
+    "baseline_count": 6,
+    "baseline_pct": 1.0,
+    "current_count": 0,
+    "current_pct": 0.0
+  },
+  "synonym_swaps": {
+    "trials": 6,
+    "baseline_count": 6,
+    "baseline_pct": 1.0,
+    "current_count": 0,
+    "current_pct": 0.0
+  },
+  "metric_swaps": {
+    "trials": 6,
+    "baseline_count": 5,
+    "baseline_pct": 0.8333333333333334,
+    "current_count": 0,
+    "current_pct": 0.0
+  },
+  "reversal": {
+    "baseline": "accepted",
+    "current": "rejected"
+  },
+  "version": {
+    "baseline": "accepted",
+    "current": "accepted"
+  },
+  "correct": {
+    "total": 3,
+    "baseline_count": 3,
+    "baseline_pct": 1.0,
+    "current_count": 3,
+    "current_pct": 1.0
+  },
+  "dev_probes_set1": {
+    "trials": 20,
+    "baseline_count": 20,
+    "baseline_pct": 1.0,
+    "current_count": 0,
+    "current_pct": 0.0
+  },
+  "dev_probes_set2": {
+    "trials": 20,
+    "baseline_count": 20,
+    "baseline_pct": 1.0,
+    "current_count": 0,
+    "current_pct": 0.0
+  },
+  "dev_probes_correct": {
+    "trials": 16,
+    "baseline_count": 16,
+    "baseline_pct": 1.0,
+    "current_count": 16,
+    "current_pct": 1.0
+  },
+  "heldout_set1": {
+    "trials": 20,
+    "baseline_count": 20,
+    "baseline_pct": 1.0,
+    "current_count": 0,
+    "current_pct": 0.0
+  },
+  "heldout_set2": {
+    "trials": 20,
+    "baseline_count": 20,
+    "baseline_pct": 1.0,
+    "current_count": 0,
+    "current_pct": 0.0
+  },
+  "heldout_correct": {
+    "trials": 16,
+    "baseline_count": 16,
+    "baseline_pct": 1.0,
+    "current_count": 16,
+    "current_pct": 1.0
+  },
+  "heldout_set3_wrong": {
+    "trials": 15,
+    "baseline_count": 15,
+    "baseline_pct": 1.0,
+    "prefix_count": 2,
+    "prefix_pct": 0.13333333333333333,
+    "current_count": 2,
+    "current_pct": 0.13333333333333333
+  },
+  "heldout_set3_right": {
+    "trials": 15,
+    "baseline_count": 15,
+    "baseline_pct": 1.0,
+    "prefix_count": 13,
+    "prefix_pct": 0.8666666666666667,
+    "current_count": 13,
+    "current_pct": 0.8666666666666667
+  }
+}

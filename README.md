@@ -60,9 +60,11 @@ Near-miss fabrication acceptance is the verifier's primary open challenge: while
 | Entity swaps accepted (6 trials) | 6 (100.0%) | 0 (0.0%) |
 | Synonym swaps accepted (6 trials) | 6 (100.0%) | 0 (0.0%) |
 | Metric swaps accepted (6 trials) | 5 (83.3%) | 0 (0.0%) |
-| Held-out adversarial probes (Set 1, 20 trials) | 20/20 (100.0%) | 0/20 (0.0%) |
-| Held-out adversarial probes (Set 2, 20 trials) | 20/20 (100.0%) | 0/20 (0.0%) |
-| Held-out correct paraphrases (16 trials) | 16/16 (100.0%) | 16/16 (100.0%) |
+| Development probes: adversarial Set 1 (used while building fix, 20 trials) | 20/20 (100.0%) | 0/20 (0.0%) |
+| Development probes: adversarial Set 2 (used while building fix, 20 trials) | 20/20 (100.0%) | 0/20 (0.0%) |
+| Development correct paraphrases (16 trials) | 16/16 (100.0%) | 16/16 (100.0%) |
+| Held-out adversarial probes (Set 3, pre-fix, 15 trials) | 15/15 (100.0%) | 2/15 (13.3%) |
+| Held-out correct claims (Set 3, pre-fix, 15 trials) | 15/15 (100.0%) | 13/15 (86.7%) |
 | Direction reversal ("fell" for +1.33 pp) | accepted | rejected |
 | Version number in factual sentence ("iOS 17") | accepted | accepted |
 | Correct answers accepted (3 benchmark cases) | 3/3 (100.0%) | 3/3 (100.0%) |
