@@ -1,0 +1,93 @@
+{
+  "total": 60,
+  "supported_total": 30,
+  "unsupported_total": 30,
+  "tp": 28,
+  "tn": 27,
+  "fp": 3,
+  "fn": 2,
+  "accuracy": 0.9166666666666666,
+  "precision": 0.9032258064516129,
+  "recall": 0.9333333333333333,
+  "f1": 0.9180327868852459,
+  "failures": [
+    "FALSE NEGATIVE: Claim: 'The debt-to-income ratio ceiling is strictly 43.0%.' | Chunk: 'dti_ceiling rule rejects or escalates any loan applicant with debt-to-income ratio exceeding 43%.' | Expl: NLI contradiction detected (contra=4.38, entail=-3.63)",
+    "FALSE NEGATIVE: Claim: 'The ETL pipeline runs nightly at 02:00 UTC to aggregate metrics.' | Chunk: 'Daily batch ETL executes at 02:00 UTC to aggregate platform usage tables.' | Expl: NLI contradiction detected (contra=4.50, entail=-3.13)",
+    "FALSE POSITIVE: Claim: 'Prometheus metrics are pushed once per year during annual maintenance windows.' | Chunk: 'Metric collection is configured with Prometheus scraping /metrics on a 15s interval.' | Expl: supported by 2 keywords (25%): ['metric', 'prometheu']",
+    "FALSE POSITIVE: Claim: 'ETL aggregation batches are triggered manually by customer email requests.' | Chunk: 'Daily batch ETL executes at 02:00 UTC to aggregate platform usage tables.' | Expl: supported by 2 keywords (25%): ['batch', 'etl']",
+    "FALSE POSITIVE: Claim: 'P0 outages are logged in a spreadsheet and reviewed at quarterly town halls.' | Chunk: 'For P0 outages, on-call paging triggers immediate incident commander mobilization.' | Expl: supported by 2 keywords (25%): ['outag', 'p0']"
+  ],
+  "backend_used": "nli",
+  "benchmark_lexical": {
+    "total": 60,
+    "supported_total": 30,
+    "unsupported_total": 30,
+    "tp": 30,
+    "tn": 24,
+    "fp": 6,
+    "fn": 0,
+    "accuracy": 0.9,
+    "precision": 0.8333333333333334,
+    "recall": 1.0,
+    "f1": 0.9090909090909091,
+    "failures": [
+      "FALSE POSITIVE: Claim: 'Boreas executes machine learning model inference using GPU tensor cores.' | Chunk: 'Boreas handles OLAP analytics queries executing against DuckDB storage.' | Expl: supported by 2 keywords (20%): ['borea', 'execut']",
+      "FALSE POSITIVE: Claim: 'The vector search engine relies on lexical BM25 matching rather than dense vectors.' | Chunk: 'Vector search uses cosine similarity over 384-dimensional dense sentence embeddings.' | Expl: supported by 3 keywords (33%): ['dense', 'search', 'vector']",
+      "FALSE POSITIVE: Claim: 'Kafka partitions events randomly across worker nodes regardless of user ID.' | Chunk: 'Events are partitioned by customer_id to guarantee in-order delivery across Kafka topics.' | Expl: supported by 5 keywords (50%): ['acros', 'event', 'id', 'kafka', 'partition']",
+      "FALSE POSITIVE: Claim: 'Prometheus metrics are pushed once per year during annual maintenance windows.' | Chunk: 'Metric collection is configured with Prometheus scraping /metrics on a 15s interval.' | Expl: supported by 2 keywords (25%): ['metric', 'prometheu']",
+      "FALSE POSITIVE: Claim: 'ETL aggregation batches are triggered manually by customer email requests.' | Chunk: 'Daily batch ETL executes at 02:00 UTC to aggregate platform usage tables.' | Expl: supported by 2 keywords (25%): ['batch', 'etl']",
+      "FALSE POSITIVE: Claim: 'P0 outages are logged in a spreadsheet and reviewed at quarterly town halls.' | Chunk: 'For P0 outages, on-call paging triggers immediate incident commander mobilization.' | Expl: supported by 2 keywords (25%): ['outag', 'p0']"
+    ]
+  },
+  "benchmark_nli": {
+    "total": 60,
+    "supported_total": 30,
+    "unsupported_total": 30,
+    "tp": 28,
+    "tn": 27,
+    "fp": 3,
+    "fn": 2,
+    "accuracy": 0.9166666666666666,
+    "precision": 0.9032258064516129,
+    "recall": 0.9333333333333333,
+    "f1": 0.9180327868852459,
+    "failures": [
+      "FALSE NEGATIVE: Claim: 'The debt-to-income ratio ceiling is strictly 43.0%.' | Chunk: 'dti_ceiling rule rejects or escalates any loan applicant with debt-to-income ratio exceeding 43%.' | Expl: NLI contradiction detected (contra=4.38, entail=-3.63)",
+      "FALSE NEGATIVE: Claim: 'The ETL pipeline runs nightly at 02:00 UTC to aggregate metrics.' | Chunk: 'Daily batch ETL executes at 02:00 UTC to aggregate platform usage tables.' | Expl: NLI contradiction detected (contra=4.50, entail=-3.13)",
+      "FALSE POSITIVE: Claim: 'Prometheus metrics are pushed once per year during annual maintenance windows.' | Chunk: 'Metric collection is configured with Prometheus scraping /metrics on a 15s interval.' | Expl: supported by 2 keywords (25%): ['metric', 'prometheu']",
+      "FALSE POSITIVE: Claim: 'ETL aggregation batches are triggered manually by customer email requests.' | Chunk: 'Daily batch ETL executes at 02:00 UTC to aggregate platform usage tables.' | Expl: supported by 2 keywords (25%): ['batch', 'etl']",
+      "FALSE POSITIVE: Claim: 'P0 outages are logged in a spreadsheet and reviewed at quarterly town halls.' | Chunk: 'For P0 outages, on-call paging triggers immediate incident commander mobilization.' | Expl: supported by 2 keywords (25%): ['outag', 'p0']"
+    ]
+  },
+  "heldout_lexical": {
+    "total": 20,
+    "supported_total": 10,
+    "unsupported_total": 10,
+    "tp": 10,
+    "tn": 8,
+    "fp": 2,
+    "fn": 0,
+    "accuracy": 0.9,
+    "precision": 0.8333333333333334,
+    "recall": 1.0,
+    "f1": 0.9090909090909091,
+    "failures": [
+      "FALSE POSITIVE: Claim: 'Aurora persists incoming telemetry directly into MongoDB document collections.' | Chunk: 'Ingested telemetry records are written to partitioned DuckDB tables by the Aurora pipeline.' | Expl: supported by 2 keywords (25%): ['aurora', 'telemetry']",
+      "FALSE POSITIVE: Claim: 'Boreas disables filter pushdown and always performs full table scans.' | Chunk: 'The query planner pushes predicate filters directly down into Parquet scan operators.' | Expl: supported by 2 keywords (22%): ['filter', 'scan']"
+    ]
+  },
+  "heldout_nli": {
+    "total": 20,
+    "supported_total": 10,
+    "unsupported_total": 10,
+    "tp": 10,
+    "tn": 10,
+    "fp": 0,
+    "fn": 0,
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "failures": []
+  }
+}

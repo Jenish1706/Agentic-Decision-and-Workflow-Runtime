@@ -4,7 +4,10 @@ of 60 supported vs unsupported claim-chunk pairs.
 Run: uv run python scripts/measure_citations.py
 """
 
-from agent_runtime.agent.verification import chunk_supports_sentence
+import json
+from pathlib import Path
+
+from agent_runtime.agent.verification import chunk_supports_sentence, _get_nli_model
 from agent_runtime.rag.documents import Chunk
 
 BENCHMARK_DATA = [
@@ -469,19 +472,48 @@ def _evaluate_pairs(dataset: list[tuple[str, str, bool]], *, use_nli: bool = Tru
     }
 
 
-def measure() -> dict:
+def is_nli_available() -> bool:
+    try:
+        return _get_nli_model() is not None
+    except Exception:
+        return False
+
+
+def load_committed_citation_measurements() -> dict | None:
+    artifact_path = Path(__file__).resolve().parent.parent / "data" / "citation_measurements.json"
+    if artifact_path.exists():
+        try:
+            return json.loads(artifact_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+    return None
+
+
+def measure(*, save_artifact: bool = True) -> dict:
+    nli_active = is_nli_available()
     b_lex = _evaluate_pairs(BENCHMARK_DATA, use_nli=False)
     b_nli = _evaluate_pairs(BENCHMARK_DATA, use_nli=True)
     h_lex = _evaluate_pairs(HELDOUT_PAIRS, use_nli=False)
     h_nli = _evaluate_pairs(HELDOUT_PAIRS, use_nli=True)
 
-    return {
+    result = {
         **b_nli,  # Default top-level for backward compatibility
+        "backend_used": "nli" if nli_active else "lexical_fallback",
         "benchmark_lexical": b_lex,
         "benchmark_nli": b_nli,
         "heldout_lexical": h_lex,
         "heldout_nli": h_nli,
     }
+
+    if save_artifact and nli_active:
+        artifact_path = Path(__file__).resolve().parent.parent / "data" / "citation_measurements.json"
+        try:
+            artifact_path.parent.mkdir(parents=True, exist_ok=True)
+            artifact_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    return result
 
 
 def main() -> None:
@@ -490,19 +522,22 @@ def main() -> None:
     b_nli = results["benchmark_nli"]
     h_lex = results["heldout_lexical"]
     h_nli = results["heldout_nli"]
+    backend = results.get("backend_used", "nli")
+    nli_label = "NLI Mode" if backend == "nli" else "NLI Mode (UNAVAILABLE - fell back to lexical)"
 
     print("================ CITATION SUPPORT MEASUREMENT ================")
+    print(f"Backend used for NLI evaluation: {backend}")
     print(f"Benchmark Set (60 pairs):")
     print(f"  Lexical Mode:  Recall {b_lex['recall']:.1%} ({b_lex['tp']}/{b_lex['supported_total']}), "
           f"Precision {b_lex['precision']:.1%} ({b_lex['tp']}/{b_lex['tp'] + b_lex['fp']}), "
           f"False Positives {b_lex['fp']}/{b_lex['unsupported_total']}")
-    print(f"  NLI Mode:      Recall {b_nli['recall']:.1%} ({b_nli['tp']}/{b_nli['supported_total']}), "
+    print(f"  {nli_label}: Recall {b_nli['recall']:.1%} ({b_nli['tp']}/{b_nli['supported_total']}), "
           f"Precision {b_nli['precision']:.1%} ({b_nli['tp']}/{b_nli['tp'] + b_nli['fp']}), "
           f"False Positives {b_nli['fp']}/{b_nli['unsupported_total']}")
     print(f"\nHeld-Out Set (20 pairs):")
     print(f"  Lexical Mode:  Recall {h_lex['recall']:.1%} ({h_lex['tp']}/{h_lex['supported_total']}), "
           f"Precision {h_lex['precision']:.1%} ({h_lex['tp']}/{h_lex['tp'] + h_lex['fp']})")
-    print(f"  NLI Mode:      Recall {h_nli['recall']:.1%} ({h_nli['tp']}/{h_nli['supported_total']}), "
+    print(f"  {nli_label}: Recall {h_nli['recall']:.1%} ({h_nli['tp']}/{h_nli['supported_total']}), "
           f"Precision {h_nli['precision']:.1%} ({h_nli['tp']}/{h_nli['tp'] + h_nli['fp']})")
     print("==============================================================")
 

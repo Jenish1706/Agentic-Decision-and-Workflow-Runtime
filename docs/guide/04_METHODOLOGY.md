@@ -58,17 +58,13 @@ Each domain contains 8–12 questions with annotated `expected_numbers` and `exp
   $$Z = \frac{\hat{p}_2 - \hat{p}_1}{\sqrt{\hat{p}(1-\hat{p})\left(\frac{1}{n_1} + \frac{1}{n_2}\right)}}$$
 - **Decision Rule:** Autonomous rollout requires $p < 0.05$ AND difference $> 0$.
 
-### 3.2 Bootstrap Confidence Intervals
-- **Application:** Performance benchmark comparisons between Single-Agent and Multi-Agent modes across seeds.
-- **Protocol:** Resample evaluation runs $B = 10,000$ times with replacement. Calculate the 95% empirical percentile confidence interval $[\theta_{0.025}^*, \theta_{0.975}^*]$.
-
 ---
 
 ## 4. Experimental Controls & Hygiene
 
 1. **Session Memory Reset:** Between independent benchmark questions, the harness must invoke `runtime.reset_session()`. Without this, short-term history leaks into subsequent prompts, contaminating evaluation results.
 2. **Deterministic LLM Drivers in CI:** To make CI builds reliable and independent of external API quotas or GPU availability, the standard test suite uses scripted `FakeLLMClient` instances that replay realistic model outputs.
-3. **Offline Hermeticity:** Model downloads must be caught cleanly (`pytest.skip(..., allow_module_level=True)`), ensuring tests never fail because of transient network or Hugging Face outages.
+3. **Offline Hermeticity:** Model downloads are caught cleanly (`pytest.skip(..., allow_module_level=True)`), and table verification checks compare against committed measurement artifacts when offline (`data/citation_measurements.json`), ensuring tests never fail because of transient network or Hugging Face outages.
 4. **Dynamic Table Rendering:** Results tables in `README.md` and `EVALUATION.md` must be rendered via `scripts/render_readme.py` and validated by `scripts/render_readme.py --check`. No number is entered manually.
 
 ---
@@ -83,4 +79,4 @@ Every core claim of the runtime is falsifiable by automated tests:
 | **Numerical Verifier Grounding** | If an entity swap (e.g. desktop for mobile) or metric swap (purchases for checkouts) is accepted as valid. | `tests/test_numerical_verification.py::test_section_0_2_numerical_verifier_probes` |
 | **Contradiction-Aware Citations** | If a cited document stating a 5s timeout accepts a claim of "no timeout and runs indefinitely". | `tests/test_verification.py::test_contradiction_guards_reject_opposing_numbers_and_negations` |
 | **Permit-Tool Pinning** | If a spoofed MCP server declaring a free-SQL tool as `RECORD` produces an `ALLOWED` verdict. | `tests/test_credit_risk_flow.py::test_spoofed_server_declaring_free_sql_as_record_cannot_permit` |
-| **Offline Test Safety** | If running pytest with an empty cache and no network raises unhandled network exceptions. | `tests/test_mcp_retriever.py` module-level skip |
+| **Offline Test Safety** | If running pytest with an empty cache and no network raises unhandled network exceptions or test failures. | `tests/test_mcp_retriever.py` & `tests/test_readme_tables.py` skips |

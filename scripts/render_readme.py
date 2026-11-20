@@ -239,7 +239,11 @@ def replace_block(content: str, tag: str, new_block: str) -> str:
 
 def render_all(check: bool = False) -> bool:
     v_metrics = measure_verifier.measure()
-    c_metrics = measure_citations.measure()
+    c_metrics = measure_citations.measure(save_artifact=not check)
+    if c_metrics.get("backend_used") != "nli":
+        committed_c = measure_citations.load_committed_citation_measurements()
+        if committed_c is not None and committed_c.get("backend_used") == "nli":
+            c_metrics = committed_c
 
     files_to_write: list[tuple[Path, str]] = []
 

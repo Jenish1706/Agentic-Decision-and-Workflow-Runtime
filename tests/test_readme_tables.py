@@ -71,3 +71,21 @@ def test_guide09_rates_match_measurement_json():
     # Verify that false/hallucinated rejection figures are NOT in guide 09
     for bad_num in ["96.6%", "99.6%", "98.2%", "2/2"]:
         assert bad_num not in content, f"Found hallucinated figure {bad_num} in guide 09"
+
+
+def test_live_nli_citation_matches_committed_measurement():
+    """Assert live NLI citation measurement matches committed artifact when model is available.
+    Skips with a clear reason if the NLI model cannot be loaded offline."""
+    from scripts import measure_citations
+
+    live_metrics = measure_citations.measure(save_artifact=False)
+    if live_metrics.get("backend_used") != "nli":
+        pytest.skip("NLI cross-encoder model not cached or network blocked; skipping live NLI comparison")
+
+    committed = measure_citations.load_committed_citation_measurements()
+    if committed is None:
+        pytest.skip("Committed citation measurement artifact not found")
+
+    assert live_metrics["benchmark_nli"]["precision"] == committed["benchmark_nli"]["precision"]
+    assert live_metrics["benchmark_nli"]["recall"] == committed["benchmark_nli"]["recall"]
+    assert live_metrics["heldout_nli"]["precision"] == committed["heldout_nli"]["precision"]

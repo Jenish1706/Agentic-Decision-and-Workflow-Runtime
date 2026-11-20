@@ -73,13 +73,13 @@ Measured across 60 hand-labelled benchmark pairs and 20 held-out pairs (written 
 ### Setup & Test Execution
 ```bash
 # Clone the repository
-git clone https://github.com/org/agent-runtime.git
+git clone <repository-url> agent-runtime
 cd agent-runtime
 
 # Install dependencies in virtual environment
 uv sync
 
-# Run full hermetic test suite (272 tests, ~90s, no GPU or Ollama required)
+# Run full hermetic test suite (283 tests, ~90s, no GPU or Ollama required)
 uv run pytest
 
 # Verify documentation consistency
