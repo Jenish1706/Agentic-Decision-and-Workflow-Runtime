@@ -218,7 +218,8 @@ def test_heldout_set3_post_fix_behavior():
 
 
 def test_heldout_set4_behavior():
-    """Verify held-out Set 4 probes written prior to AR-15 fix (0/15 wrong accepted, 0/15 right rejected)."""
+    """Set 4 was written before the AR-15 fix, but the fix was developed against its failures,
+    so 0/15 wrong accepted and 0/15 right rejected here is NOT a held-out result (see Set 5)."""
     from scripts.measure_verifier import (
         build_ledger,
         heldout_set4_wrong_claims,
@@ -235,5 +236,30 @@ def test_heldout_set4_behavior():
     assert len(right_rejected) == 0, f"Expected 0 right rejected, got {right_rejected}"
 
 
+def test_heldout_set5_external_behavior():
+    """External held-out Set 5 (never used for tuning), pinned exactly as measured on 0f2ad35.
 
+    The verifier was deliberately NOT fixed against this set. If a later change alters these
+    results, update data/verifier_measurements.json via the measurement script and the
+    Limitations list in docs/guide/09_RESULTS_AND_LIMITATIONS.md section 3.4 together.
+    """
+    from scripts.measure_verifier import (
+        build_ledger,
+        heldout_set5_wrong_claims,
+        heldout_set5_right_claims,
+    )
+    ledger = build_ledger()
+    wrong = heldout_set5_wrong_claims()
+    right = heldout_set5_right_claims()
+    assert len(wrong) == 15 and len(right) == 15
 
+    wrong_accepted = [s for s in wrong if verify_numerical_grounding(s, ledger).valid]
+    right_rejected = [s for s in right if not verify_numerical_grounding(s, ledger).valid]
+
+    assert wrong_accepted == [
+        "Mobile conversion roughly doubled, from 1.6% to 2.8%.",
+        "Last week, desktop converted at 1.6% compared with 4.0% on mobile.",
+    ]
+    assert right_rejected == [
+        "Among mobile users, the conversion rate was 2.8% before and 1.6% last week.",
+    ]

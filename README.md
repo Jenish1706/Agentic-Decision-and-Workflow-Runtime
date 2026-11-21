@@ -68,14 +68,18 @@ Near-miss fabrication acceptance is the verifier's primary open challenge: while
 | Development probes: adversarial Set 1 (used while building fix, 20 trials) | 20/20 (100.0%) | 0/20 (0.0%) |
 | Development probes: adversarial Set 2 (used while building fix, 20 trials) | 20/20 (100.0%) | 0/20 (0.0%) |
 | Development correct paraphrases (16 trials) | 16/16 (100.0%) | 16/16 (100.0%) |
-| Held-out adversarial probes (Set 3, pre-fix, 15 trials) | 15/15 (100.0%) | 2/15 (13.3%) |
-| Held-out correct claims (Set 3, pre-fix, 15 trials) | 15/15 (100.0%) | 13/15 (86.7%) |
-| Held-out adversarial probes (Set 4, post-fix, 15 trials) | 15/15 (100.0%) | 0/15 (0.0%) |
-| Held-out correct claims (Set 4, post-fix, 15 trials) | 15/15 (100.0%) | 15/15 (100.0%) |
+| Set 3 (written before the fix; pre-fix result, the fix was developed against it): adversarial probes, 15 trials | 15/15 (100.0%) | 2/15 (13.3%) |
+| Set 3 (written before the fix; pre-fix result, the fix was developed against it): correct claims, 15 trials | 15/15 (100.0%) | 13/15 (86.7%) |
+| Set 4 (written before the fix; the fix was developed against it): adversarial probes, 15 trials | 15/15 (100.0%) | 0/15 (0.0%) |
+| Set 4 (written before the fix; the fix was developed against it): correct claims, 15 trials | 15/15 (100.0%) | 15/15 (100.0%) |
+| External held-out (never used for tuning): Set 5 adversarial probes, 15 trials | 15/15 (100.0%) | 2/15 (13.3%) |
+| External held-out (never used for tuning): Set 5 correct claims accepted, 15 trials | 15/15 (100.0%) | 14/15 (93.3%) |
 | Direction reversal ("fell" for +1.33 pp) | accepted | rejected |
 | Version number in factual sentence ("iOS 17") | accepted | accepted |
 | Correct answers accepted (3 benchmark cases) | 3/3 (100.0%) | 3/3 (100.0%) |
 <!-- END_VERIFIER_TABLE -->
+
+Rows fall into three groups. **Development probes** (Sets 1 and 2) were used while building the fix. **Written-before-fix sets** (Sets 3 and 4) came first, but the fix was then developed against their failures, so their results measure the target rather than generalisation. Only **Set 5** is **external held-out (never used for tuning)**: it was written by an external reviewer after the fixes, and on it the verifier still accepts 2 of 15 wrong claims and rejects 1 of 15 correct ones. Those three misses are listed in [Limitations](docs/guide/09_RESULTS_AND_LIMITATIONS.md#34-numerical-verifier-misses-on-the-external-held-out-set); each fresh phrasing set finding a few new misses is the expected limit of rule-based checking.
 
 ### Citation Entailment Verification
 Evaluated across 60 hand-labelled benchmark pairs and 20 held-out pairs (written before tuning thresholds), comparing offline lexical matching against local neural NLI cross-encoders:

@@ -45,6 +45,8 @@ def generate_readme_verifier_table(v_metrics: dict) -> str:
     h3_r = v_metrics["heldout_set3_right"]
     h4_w = v_metrics["heldout_set4_wrong"]
     h4_r = v_metrics["heldout_set4_right"]
+    h5_w = v_metrics["heldout_set5_wrong"]
+    h5_r = v_metrics["heldout_set5_right"]
     trials = v_metrics["trials"]
 
     return (
@@ -62,10 +64,12 @@ def generate_readme_verifier_table(v_metrics: dict) -> str:
         f"| Development probes: adversarial Set 1 (used while building fix, {h1['trials']} trials) | {h1['baseline_count']}/{h1['trials']} ({h1['baseline_pct']:.1%}) | {h1['current_count']}/{h1['trials']} ({h1['current_pct']:.1%}) |\n"
         f"| Development probes: adversarial Set 2 (used while building fix, {h2['trials']} trials) | {h2['baseline_count']}/{h2['trials']} ({h2['baseline_pct']:.1%}) | {h2['current_count']}/{h2['trials']} ({h2['current_pct']:.1%}) |\n"
         f"| Development correct paraphrases ({h_cor['trials']} trials) | {h_cor['baseline_count']}/{h_cor['trials']} ({h_cor['baseline_pct']:.1%}) | {h_cor['current_count']}/{h_cor['trials']} ({h_cor['current_pct']:.1%}) |\n"
-        f"| Held-out adversarial probes (Set 3, pre-fix, {h3_w['trials']} trials) | {h3_w['baseline_count']}/{h3_w['trials']} ({h3_w['baseline_pct']:.1%}) | {h3_w['prefix_count']}/{h3_w['trials']} ({h3_w['prefix_pct']:.1%}) |\n"
-        f"| Held-out correct claims (Set 3, pre-fix, {h3_r['trials']} trials) | {h3_r['baseline_count']}/{h3_r['trials']} ({h3_r['baseline_pct']:.1%}) | {h3_r['prefix_count']}/{h3_r['trials']} ({h3_r['prefix_pct']:.1%}) |\n"
-        f"| Held-out adversarial probes (Set 4, post-fix, {h4_w['trials']} trials) | {h4_w['baseline_count']}/{h4_w['trials']} ({h4_w['baseline_pct']:.1%}) | {h4_w['current_count']}/{h4_w['trials']} ({h4_w['current_pct']:.1%}) |\n"
-        f"| Held-out correct claims (Set 4, post-fix, {h4_r['trials']} trials) | {h4_r['baseline_count']}/{h4_r['trials']} ({h4_r['baseline_pct']:.1%}) | {h4_r['current_count']}/{h4_r['trials']} ({h4_r['current_pct']:.1%}) |\n"
+        f"| Set 3 (written before the fix; pre-fix result, the fix was developed against it): adversarial probes, {h3_w['trials']} trials | {h3_w['baseline_count']}/{h3_w['trials']} ({h3_w['baseline_pct']:.1%}) | {h3_w['prefix_count']}/{h3_w['trials']} ({h3_w['prefix_pct']:.1%}) |\n"
+        f"| Set 3 (written before the fix; pre-fix result, the fix was developed against it): correct claims, {h3_r['trials']} trials | {h3_r['baseline_count']}/{h3_r['trials']} ({h3_r['baseline_pct']:.1%}) | {h3_r['prefix_count']}/{h3_r['trials']} ({h3_r['prefix_pct']:.1%}) |\n"
+        f"| Set 4 (written before the fix; the fix was developed against it): adversarial probes, {h4_w['trials']} trials | {h4_w['baseline_count']}/{h4_w['trials']} ({h4_w['baseline_pct']:.1%}) | {h4_w['current_count']}/{h4_w['trials']} ({h4_w['current_pct']:.1%}) |\n"
+        f"| Set 4 (written before the fix; the fix was developed against it): correct claims, {h4_r['trials']} trials | {h4_r['baseline_count']}/{h4_r['trials']} ({h4_r['baseline_pct']:.1%}) | {h4_r['current_count']}/{h4_r['trials']} ({h4_r['current_pct']:.1%}) |\n"
+        f"| External held-out (never used for tuning): Set 5 adversarial probes, {h5_w['trials']} trials | {h5_w['baseline_count']}/{h5_w['trials']} ({h5_w['baseline_pct']:.1%}) | {h5_w['current_count']}/{h5_w['trials']} ({h5_w['current_pct']:.1%}) |\n"
+        f"| External held-out (never used for tuning): Set 5 correct claims accepted, {h5_r['trials']} trials | {h5_r['baseline_count']}/{h5_r['trials']} ({h5_r['baseline_pct']:.1%}) | {h5_r['current_count']}/{h5_r['trials']} ({h5_r['current_pct']:.1%}) |\n"
         f"| Direction reversal (\"fell\" for +1.33 pp) | {rev['baseline']} | {rev['current']} |\n"
         f"| Version number in factual sentence (\"iOS 17\") | {ver['baseline']} | {ver['current']} |\n"
         f"| Correct answers accepted ({cor['total']} benchmark cases) | {cor['baseline_count']}/{cor['total']} ({cor['baseline_pct']:.1%}) | {cor['current_count']}/{cor['total']} ({cor['current_pct']:.1%}) |\n"
@@ -113,6 +117,8 @@ def generate_evaluation_verifier_table(v_metrics: dict) -> str:
     h3_r = v_metrics["heldout_set3_right"]
     h4_w = v_metrics["heldout_set4_wrong"]
     h4_r = v_metrics["heldout_set4_right"]
+    h5_w = v_metrics["heldout_set5_wrong"]
+    h5_r = v_metrics["heldout_set5_right"]
     trials = v_metrics["trials"]
 
     return (
@@ -130,10 +136,12 @@ def generate_evaluation_verifier_table(v_metrics: dict) -> str:
         f"| Development probes: adversarial Set 1 (used while building fix, {h1['trials']} trials) | {h1['baseline_count']}/{h1['trials']} ({h1['baseline_pct']:.1%}) | {h1['current_count']}/{h1['trials']} ({h1['current_pct']:.1%}) |\n"
         f"| Development probes: adversarial Set 2 (used while building fix, {h2['trials']} trials) | {h2['baseline_count']}/{h2['trials']} ({h2['baseline_pct']:.1%}) | {h2['current_count']}/{h2['trials']} ({h2['current_pct']:.1%}) |\n"
         f"| Development correct paraphrases ({h_cor['trials']} trials, false rejection control) | {h_cor['baseline_count']}/{h_cor['trials']} ({h_cor['baseline_pct']:.1%}) | {h_cor['current_count']}/{h_cor['trials']} ({h_cor['current_pct']:.1%}) |\n"
-        f"| Held-out adversarial probes (Set 3, pre-fix, {h3_w['trials']} trials) | {h3_w['baseline_count']}/{h3_w['trials']} ({h3_w['baseline_pct']:.1%}) | {h3_w['prefix_count']}/{h3_w['trials']} ({h3_w['prefix_pct']:.1%}) |\n"
-        f"| Held-out correct claims (Set 3, pre-fix, {h3_r['trials']} trials, false rejection control) | {h3_r['baseline_count']}/{h3_r['trials']} ({h3_r['baseline_pct']:.1%}) | {h3_r['prefix_count']}/{h3_r['trials']} ({h3_r['prefix_pct']:.1%}) |\n"
-        f"| Held-out adversarial probes (Set 4, post-fix, {h4_w['trials']} trials) | {h4_w['baseline_count']}/{h4_w['trials']} ({h4_w['baseline_pct']:.1%}) | {h4_w['current_count']}/{h4_w['trials']} ({h4_w['current_pct']:.1%}) |\n"
-        f"| Held-out correct claims (Set 4, post-fix, {h4_r['trials']} trials, false rejection control) | {h4_r['baseline_count']}/{h4_r['trials']} ({h4_r['baseline_pct']:.1%}) | {h4_r['current_count']}/{h4_r['trials']} ({h4_r['current_pct']:.1%}) |\n"
+        f"| Set 3 (written before the fix; pre-fix result, the fix was developed against it): adversarial probes, {h3_w['trials']} trials | {h3_w['baseline_count']}/{h3_w['trials']} ({h3_w['baseline_pct']:.1%}) | {h3_w['prefix_count']}/{h3_w['trials']} ({h3_w['prefix_pct']:.1%}) |\n"
+        f"| Set 3 (written before the fix; pre-fix result, the fix was developed against it): correct claims, {h3_r['trials']} trials, false rejection control | {h3_r['baseline_count']}/{h3_r['trials']} ({h3_r['baseline_pct']:.1%}) | {h3_r['prefix_count']}/{h3_r['trials']} ({h3_r['prefix_pct']:.1%}) |\n"
+        f"| Set 4 (written before the fix; the fix was developed against it): adversarial probes, {h4_w['trials']} trials | {h4_w['baseline_count']}/{h4_w['trials']} ({h4_w['baseline_pct']:.1%}) | {h4_w['current_count']}/{h4_w['trials']} ({h4_w['current_pct']:.1%}) |\n"
+        f"| Set 4 (written before the fix; the fix was developed against it): correct claims, {h4_r['trials']} trials, false rejection control | {h4_r['baseline_count']}/{h4_r['trials']} ({h4_r['baseline_pct']:.1%}) | {h4_r['current_count']}/{h4_r['trials']} ({h4_r['current_pct']:.1%}) |\n"
+        f"| External held-out (never used for tuning): Set 5 adversarial probes, {h5_w['trials']} trials | {h5_w['baseline_count']}/{h5_w['trials']} ({h5_w['baseline_pct']:.1%}) | {h5_w['current_count']}/{h5_w['trials']} ({h5_w['current_pct']:.1%}) |\n"
+        f"| External held-out (never used for tuning): Set 5 correct claims accepted, {h5_r['trials']} trials, false rejection control | {h5_r['baseline_count']}/{h5_r['trials']} ({h5_r['baseline_pct']:.1%}) | {h5_r['current_count']}/{h5_r['trials']} ({h5_r['current_pct']:.1%}) |\n"
         f"| \"Variant B fell by 1.33 percentage points\" (evidence: +1.333) | {rev['baseline']} | {rev['current']} |\n"
         f"| Version number accepted as valid (\"...iOS 17 update\") | {ver['baseline']} | {ver['current']} |\n"
         f"| Benchmark correct answers ({cor['total']} trials, false rejection control) | {cor['baseline_count']}/{cor['total']} ({cor['baseline_pct']:.1%}) | {cor['current_count']}/{cor['total']} ({cor['current_pct']:.1%}) |\n"
@@ -179,6 +187,8 @@ def generate_guide09_verifier_block(v_metrics: dict) -> str:
     h3_r = v_metrics["heldout_set3_right"]
     h4_w = v_metrics["heldout_set4_wrong"]
     h4_r = v_metrics["heldout_set4_right"]
+    h5_w = v_metrics["heldout_set5_wrong"]
+    h5_r = v_metrics["heldout_set5_right"]
     trials = v_metrics["trials"]
 
     return (
@@ -192,10 +202,12 @@ def generate_guide09_verifier_block(v_metrics: dict) -> str:
         f"  - Development Adversarial Set 1 (used while building fix, {h1['trials']} trials): **{1-h1['current_pct']:.0%} rejected** ({h1['trials']-h1['current_count']}/{h1['trials']} rejected).\n"
         f"  - Development Adversarial Set 2 (used while building fix, {h2['trials']} trials): **{1-h2['current_pct']:.0%} rejected** ({h2['trials']-h2['current_count']}/{h2['trials']} rejected).\n"
         f"  - Development Correct Paraphrases ({h_cor['trials']} trials): **{h_cor['current_pct']:.1%} accepted** ({h_cor['current_count']}/{h_cor['trials']} accepted, 0% false rejections).\n"
-        f"  - Held-out Adversarial Set 3 (pre-fix, {h3_w['trials']} trials): **{h3_w['prefix_count']}/{h3_w['trials']} accepted** ({1-h3_w['prefix_pct']:.1%} rejected; period swaps pass).\n"
-        f"  - Held-out Correct Claims Set 3 (pre-fix, {h3_r['trials']} trials): **{h3_r['trials']-h3_r['prefix_count']}/{h3_r['trials']} false rejections** ({h3_r['prefix_count']}/{h3_r['trials']} accepted; shoppers / points fail).\n"
-        f"  - Held-out Adversarial Set 4 (post-fix, {h4_w['trials']} trials): **{1-h4_w['current_pct']:.0%} rejected** ({h4_w['trials']-h4_w['current_count']}/{h4_w['trials']} rejected; {h4_w['prefix_count']}/{h4_w['trials']} passed pre-fix).\n"
-        f"  - Held-out Correct Claims Set 4 (post-fix, {h4_r['trials']} trials): **{h4_r['current_pct']:.1%} accepted** ({h4_r['current_count']}/{h4_r['trials']} accepted; {h4_r['trials']-h4_r['prefix_count']} false rejections pre-fix).\n"
+        f"  - Adversarial Set 3 (written before the fix; pre-fix result, the fix was developed against it, {h3_w['trials']} trials): **{h3_w['prefix_count']}/{h3_w['trials']} accepted** ({1-h3_w['prefix_pct']:.1%} rejected; period swaps pass).\n"
+        f"  - Correct Claims Set 3 (written before the fix; pre-fix result, the fix was developed against it, {h3_r['trials']} trials): **{h3_r['trials']-h3_r['prefix_count']}/{h3_r['trials']} false rejections** ({h3_r['prefix_count']}/{h3_r['trials']} accepted; shoppers / points fail).\n"
+        f"  - Adversarial Set 4 (written before the fix; the fix was developed against it, {h4_w['trials']} trials): **{1-h4_w['current_pct']:.0%} rejected** ({h4_w['trials']-h4_w['current_count']}/{h4_w['trials']} rejected; {h4_w['prefix_count']}/{h4_w['trials']} passed pre-fix).\n"
+        f"  - Correct Claims Set 4 (written before the fix; the fix was developed against it, {h4_r['trials']} trials): **{h4_r['current_pct']:.1%} accepted** ({h4_r['current_count']}/{h4_r['trials']} accepted; {h4_r['trials']-h4_r['prefix_count']} false rejections pre-fix).\n"
+        f"  - **External held-out (never used for tuning)** Adversarial Set 5 ({h5_w['trials']} trials): **{h5_w['current_count']}/{h5_w['trials']} wrong claims accepted** ({h5_w['trials']-h5_w['current_count']}/{h5_w['trials']} rejected; see §3.4).\n"
+        f"  - **External held-out (never used for tuning)** Correct Claims Set 5 ({h5_r['trials']} trials): **{h5_r['trials']-h5_r['current_count']}/{h5_r['trials']} falsely rejected** ({h5_r['current_count']}/{h5_r['trials']} accepted; see §3.4).\n"
         f"- **Synthetic Fabrication Acceptance ({3*trials:,} trials):**\n"
         f"  - Plausible-range percentages ({trials:,} trials): **{plaus['current_pct']:.1%} accepted** ({plaus['current_count']:,}/{trials:,}).\n"
         f"  - Percentage-point gaps ({trials:,} trials): **{gaps['current_pct']:.1%} accepted** ({gaps['current_count']:,}/{trials:,}).\n"
@@ -238,6 +250,8 @@ def generate_guide00_results_block(v_metrics: dict, c_metrics: dict) -> str:
     h3_r = v_metrics["heldout_set3_right"]
     h4_w = v_metrics["heldout_set4_wrong"]
     h4_r = v_metrics["heldout_set4_right"]
+    h5_w = v_metrics["heldout_set5_wrong"]
+    h5_r = v_metrics["heldout_set5_right"]
     trials = v_metrics["trials"]
     b_lex = c_metrics["benchmark_lexical"]
     b_nli = c_metrics["benchmark_nli"]
@@ -249,7 +263,8 @@ def generate_guide00_results_block(v_metrics: dict, c_metrics: dict) -> str:
         "All measurements are verified and rendered directly by `scripts/render_readme.py`:\n"
         f"- **Numerical Claim Verification:** Correct answers are accepted at **{cor['current_pct']:.1%}** across baseline test suites, while rejecting 100% of entity swaps, metric swaps, and synonym swaps. Random fabricated claims are accepted at {r['current_pct']:.1%} ({r['current_count']:,}/{trials:,} trials). "
         f"Near-miss fabricated values in the plausible range are accepted at higher rates: {plaus['current_pct']:.1%} for plausible percentages, {gaps['current_pct']:.1%} for percentage-point gaps, and {rels['current_pct']:.1%} for relative changes ({trials:,} trials each). "
-        f"Development probe sets (Sets 1 & 2, used while building fixes) show 0/20 wrong claims accepted; on fresh held-out probes (Set 3), {h3_w['prefix_count']}/{h3_w['trials']} wrong claims were accepted (period swaps) and {h3_r['trials']-h3_r['prefix_count']}/{h3_r['trials']} correct claims were falsely rejected prior to AR-15; on Set 4, post-fix wrong claims accepted is {h4_w['current_count']}/{h4_w['trials']} and false rejections is {h4_r['trials']-h4_r['current_count']}/{h4_r['trials']}. "
+        f"Development probe sets (Sets 1 & 2, used while building fixes) show 0/20 wrong claims accepted; on Set 3 (written before the fix, pre-fix result), {h3_w['prefix_count']}/{h3_w['trials']} wrong claims were accepted (period swaps) and {h3_r['trials']-h3_r['prefix_count']}/{h3_r['trials']} correct claims were falsely rejected prior to AR-15, and the fix was then developed against those failures; Set 4 was also written before the fix, but the fix was developed against it, so its {h4_w['current_count']}/{h4_w['trials']} wrong accepted and {h4_r['trials']-h4_r['current_count']}/{h4_r['trials']} false rejections measure the target, not generalisation. "
+        f"The only never-tuned number is the external held-out Set 5: {h5_w['current_count']}/{h5_w['trials']} wrong claims accepted and {h5_r['trials']-h5_r['current_count']}/{h5_r['trials']} correct claims falsely rejected (listed in [09_RESULTS_AND_LIMITATIONS.md](09_RESULTS_AND_LIMITATIONS.md)). "
         "See full breakdown in [README.md#numerical-verification-benchmark](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../../EVALUATION.md).\n"
         f"- **Citation Entailment Verification:** In offline lexical fallback mode, precision is {b_lex['precision']:.1%} (benchmark, {b_lex['fp']}/{b_lex['unsupported_total']} contradictions accepted) and {h_lex['precision']:.1%} (held-out); "
         f"with local NLI enabled, precision reaches {b_nli['precision']:.1%} (benchmark, {b_nli['fp']}/{b_nli['unsupported_total']} contradictions accepted) and {h_nli['precision']:.1%} (held-out). "

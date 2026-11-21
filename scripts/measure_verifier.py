@@ -274,7 +274,8 @@ def heldout_set3_right_claims() -> list[str]:
 
 
 def heldout_set4_wrong_claims() -> list[str]:
-    """Fresh held-out probes written before AR-15 changes (§0.4 Set 4)."""
+    """Probes written before the AR-15 fix (§0.4 Set 4). The fix was then developed
+    against their 8 failures, so this set is NOT held out for the fixed verifier."""
     return [
         "Mobile conversion was 2.8% last week.",
         "Mobile conversion increased to 2.8% last week.",
@@ -295,7 +296,8 @@ def heldout_set4_wrong_claims() -> list[str]:
 
 
 def heldout_set4_right_claims() -> list[str]:
-    """Fresh held-out correct claims written before AR-15 changes (§0.4 Set 4)."""
+    """Correct claims written before the AR-15 fix (§0.4 Set 4); the fix was developed
+    against this set, so it is NOT held out for the fixed verifier."""
     return [
         "Mobile shoppers converted at roughly 2.8% in the baseline week.",
         "Desktop visitors converted at 4.1% during the baseline week.",
@@ -312,6 +314,50 @@ def heldout_set4_right_claims() -> list[str]:
         "Desktop shoppers maintained a 4.0% conversion rate last week.",
         "In the baseline week, desktop checkouts started reached 1,200.",
         "Variant B converted at 2.9% versus 1.6% for variant A.",
+    ]
+
+
+def heldout_set5_wrong_claims() -> list[str]:
+    """External held-out probes (§0.5 Set 5): written after the AR-15/AR-16 fixes by an
+    external reviewer and never used for tuning. Mirrors .audit/repro/verifier_probe_set5.py.
+    Do not fix the verifier against this set; its misses are listed under Limitations."""
+    return [
+        "Desktop buyers converted at about 1.6% last week.",
+        "Among mobile users, the conversion rate was 4.0% last week.",
+        "Mobile conversion roughly doubled, from 1.6% to 2.8%.",
+        "Desktop fell from 4.0% to 1.6% last week.",
+        "Last week, desktop converted at 1.6% compared with 4.0% on mobile.",
+        "The mobile drop was 2.4 percentage points.",
+        "Desktop conversion went down by 1.2pp.",
+        "In the baseline period mobile converted at 1.6%.",
+        "Wearable conversion was 1.6% last week.",
+        "Smart-TV shoppers converted at 4.0%.",
+        "Mobile had 2,700 purchases completed in one segment last week.",
+        "Variant A's conversion was 2.9%.",
+        "The difference between variants was 2.9 percentage points.",
+        "The result was significant at p = 0.028.",
+        "Mobile conversion rose about 43%.",
+    ]
+
+
+def heldout_set5_right_claims() -> list[str]:
+    """External held-out correct claims (§0.5 Set 5); see heldout_set5_wrong_claims."""
+    return [
+        "Desktop buyers converted at about 4.0% last week.",
+        "Among mobile users, the conversion rate was 2.8% before and 1.6% last week.",
+        "Mobile conversion roughly halved, from 2.8% to 1.6%.",
+        "Desktop was flat at 4.0% across both weeks.",
+        "Last week, mobile converted at 1.6% compared with 4.0% on desktop.",
+        "The mobile drop was 1.2 percentage points.",
+        "Mobile conversion went down by 1.2pp.",
+        "In the baseline period mobile converted at 2.8%.",
+        "Mobile checkout conversion was 1.6% last week.",
+        "Desktop people converted at 4.1% in the baseline week.",
+        "Mobile had 2,700 checkouts started in one segment last week.",
+        "Variant B's conversion was 2.9%.",
+        "The difference between variants was 1.33 percentage points.",
+        "The result was significant at p = 0.014.",
+        "Desktop conversion stayed near 4% while mobile fell about 43%.",
     ]
 
 
@@ -408,6 +454,15 @@ def measure(save_artifact: bool = True) -> dict:
 
     base_h4_right = count_accepted(baseline, h4_right)
     curr_h4_right = count_accepted(current, h4_right)
+
+    h5_wrong = heldout_set5_wrong_claims()
+    h5_right = heldout_set5_right_claims()
+
+    base_h5_wrong = count_accepted(baseline, h5_wrong)
+    curr_h5_wrong = count_accepted(current, h5_wrong)
+
+    base_h5_right = count_accepted(baseline, h5_right)
+    curr_h5_right = count_accepted(current, h5_right)
 
     res = {
         "trials": TRIALS,
@@ -564,6 +619,20 @@ def measure(save_artifact: bool = True) -> dict:
             "prefix_pct": 13 / len(h4_right),
             "current_count": curr_h4_right,
             "current_pct": curr_h4_right / len(h4_right),
+        },
+        "heldout_set5_wrong": {
+            "trials": len(h5_wrong),
+            "baseline_count": base_h5_wrong,
+            "baseline_pct": base_h5_wrong / len(h5_wrong),
+            "current_count": curr_h5_wrong,
+            "current_pct": curr_h5_wrong / len(h5_wrong),
+        },
+        "heldout_set5_right": {
+            "trials": len(h5_right),
+            "baseline_count": base_h5_right,
+            "baseline_pct": base_h5_right / len(h5_right),
+            "current_count": curr_h5_right,
+            "current_pct": curr_h5_right / len(h5_right),
         },
     }
 

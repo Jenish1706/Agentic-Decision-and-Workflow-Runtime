@@ -153,5 +153,19 @@
     "prefix_pct": 0.8666666666666667,
     "current_count": 15,
     "current_pct": 1.0
+  },
+  "heldout_set5_wrong": {
+    "trials": 15,
+    "baseline_count": 15,
+    "baseline_pct": 1.0,
+    "current_count": 2,
+    "current_pct": 0.13333333333333333
+  },
+  "heldout_set5_right": {
+    "trials": 15,
+    "baseline_count": 15,
+    "baseline_pct": 1.0,
+    "current_count": 14,
+    "current_pct": 0.9333333333333333
   }
 }

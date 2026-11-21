@@ -21,10 +21,12 @@ All result numbers reflect verified code runs rendered via `scripts/render_readm
   - Development Adversarial Set 1 (used while building fix, 20 trials): **100% rejected** (20/20 rejected).
   - Development Adversarial Set 2 (used while building fix, 20 trials): **100% rejected** (20/20 rejected).
   - Development Correct Paraphrases (16 trials): **100.0% accepted** (16/16 accepted, 0% false rejections).
-  - Held-out Adversarial Set 3 (pre-fix, 15 trials): **2/15 accepted** (86.7% rejected; period swaps pass).
-  - Held-out Correct Claims Set 3 (pre-fix, 15 trials): **2/15 false rejections** (13/15 accepted; shoppers / points fail).
-  - Held-out Adversarial Set 4 (post-fix, 15 trials): **100% rejected** (15/15 rejected; 8/15 passed pre-fix).
-  - Held-out Correct Claims Set 4 (post-fix, 15 trials): **100.0% accepted** (15/15 accepted; 2 false rejections pre-fix).
+  - Adversarial Set 3 (written before the fix; pre-fix result, the fix was developed against it, 15 trials): **2/15 accepted** (86.7% rejected; period swaps pass).
+  - Correct Claims Set 3 (written before the fix; pre-fix result, the fix was developed against it, 15 trials): **2/15 false rejections** (13/15 accepted; shoppers / points fail).
+  - Adversarial Set 4 (written before the fix; the fix was developed against it, 15 trials): **100% rejected** (15/15 rejected; 8/15 passed pre-fix).
+  - Correct Claims Set 4 (written before the fix; the fix was developed against it, 15 trials): **100.0% accepted** (15/15 accepted; 2 false rejections pre-fix).
+  - **External held-out (never used for tuning)** Adversarial Set 5 (15 trials): **2/15 wrong claims accepted** (13/15 rejected; see §3.4).
+  - **External held-out (never used for tuning)** Correct Claims Set 5 (15 trials): **1/15 falsely rejected** (14/15 accepted; see §3.4).
 - **Synthetic Fabrication Acceptance (6,000 trials):**
   - Plausible-range percentages (2,000 trials): **6.8% accepted** (136/2,000).
   - Percentage-point gaps (2,000 trials): **12.4% accepted** (248/2,000).
@@ -82,6 +84,15 @@ There is currently **no end-to-end LLM measurement** beyond the 5-question smoke
 
 ### 3.3 External Validity
 - **Generalization Across Domains:** The runtime was validated across four enterprise domains (credit underwriting, systems operations, document audit, and product analytics). Novel domains with fundamentally different entity models (e.g. graph-based knowledge networks or continuous temporal control) would require custom entity binding logic.
+
+### 3.4 Numerical Verifier: Misses on the External Held-Out Set
+Sets 1–4 were all used to build or tune the verifier (Set 4 was written before the fix, but the fix was developed against its failures), so their 0 misses do not measure generalisation. Set 5 was written by an external reviewer after the fixes and never used for tuning, and the verifier was deliberately not fixed against it. On Set 5 it accepts 2 of 15 wrong claims and rejects 1 of 15 correct claims:
+
+- **Accepted (wrong): "Mobile conversion roughly doubled, from 1.6% to 2.8%."** The time order is reversed (in the ledger mobile fell from 2.8% to 1.6%).
+- **Accepted (wrong): "Last week, desktop converted at 1.6% compared with 4.0% on mobile."** The entity comes after the value.
+- **Rejected (correct): "Among mobile users, the conversion rate was 2.8% before and 1.6% last week."** "before" is not read as the baseline period.
+
+Each fresh phrasing set finding a few new misses is the expected limit of rule-based checking, not a one-off bug. It is the argument for declared derivations, where the model states which ledger rows and which operation produced a number and the verifier checks that declaration instead of inferring it from prose. The set lives in `heldout_set5_wrong_claims` / `heldout_set5_right_claims` in `scripts/measure_verifier.py` and is pinned by `tests/test_numerical_verification.py::test_heldout_set5_external_behavior`.
 
 ---
 
