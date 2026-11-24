@@ -4,8 +4,8 @@ verified benchmark and measurement artifacts.
 Guarantees that hand-edited or hallucinated numbers cannot survive in documentation.
 
 Usage:
-  uv run python scripts/render_readme.py         # Update README.md and EVALUATION.md
-  uv run python scripts/render_readme.py --check # Check consistency without modifying
+  uv run python scripts/tooling/render_readme.py         # Update README.md and EVALUATION.md
+  uv run python scripts/tooling/render_readme.py --check # Check consistency without modifying
 """
 
 import argparse
@@ -14,16 +14,13 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 
-# Ensure scripts dir is in path
+# Ensure the repository root is importable (for scripts.measurements)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-if str(ROOT / "scripts") not in sys.path:
-    sys.path.insert(0, str(ROOT / "scripts"))
 
-import measure_citations
-import measure_verifier
+from scripts.measurements import measure_citations, measure_verifier
 
 
 def generate_readme_verifier_table(v_metrics: dict) -> str:
@@ -260,12 +257,12 @@ def generate_guide00_results_block(v_metrics: dict, c_metrics: dict) -> str:
 
     return (
         "<!-- BEGIN_GUIDE00_RESULTS -->\n"
-        "All measurements are verified and rendered directly by `scripts/render_readme.py`:\n"
+        "All measurements are verified and rendered directly by `scripts/tooling/render_readme.py`:\n"
         f"- **Numerical Claim Verification:** Correct answers are accepted at **{cor['current_pct']:.1%}** across baseline test suites, while rejecting 100% of entity swaps, metric swaps, and synonym swaps. Random fabricated claims are accepted at {r['current_pct']:.1%} ({r['current_count']:,}/{trials:,} trials). "
         f"Near-miss fabricated values in the plausible range are accepted at higher rates: {plaus['current_pct']:.1%} for plausible percentages, {gaps['current_pct']:.1%} for percentage-point gaps, and {rels['current_pct']:.1%} for relative changes ({trials:,} trials each). "
         f"Development probe sets (Sets 1 & 2, used while building fixes) show 0/20 wrong claims accepted; on Set 3 (written before the fix, pre-fix result), {h3_w['prefix_count']}/{h3_w['trials']} wrong claims were accepted (period swaps) and {h3_r['trials']-h3_r['prefix_count']}/{h3_r['trials']} correct claims were falsely rejected prior to AR-15, and the fix was then developed against those failures; Set 4 was also written before the fix, but the fix was developed against it, so its {h4_w['current_count']}/{h4_w['trials']} wrong accepted and {h4_r['trials']-h4_r['current_count']}/{h4_r['trials']} false rejections measure the target, not generalisation. "
         f"The only never-tuned number is the external held-out Set 5: {h5_w['current_count']}/{h5_w['trials']} wrong claims accepted and {h5_r['trials']-h5_r['current_count']}/{h5_r['trials']} correct claims falsely rejected (listed in [09_RESULTS_AND_LIMITATIONS.md](09_RESULTS_AND_LIMITATIONS.md)). "
-        "See full breakdown in [README.md#numerical-verification-benchmark](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../../EVALUATION.md).\n"
+        "See full breakdown in [README.md#numerical-verification-benchmark](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../EVALUATION.md).\n"
         f"- **Citation Entailment Verification:** In offline lexical fallback mode, precision is {b_lex['precision']:.1%} (benchmark, {b_lex['fp']}/{b_lex['unsupported_total']} contradictions accepted) and {h_lex['precision']:.1%} (held-out); "
         f"with local NLI enabled, precision reaches {b_nli['precision']:.1%} (benchmark, {b_nli['fp']}/{b_nli['unsupported_total']} contradictions accepted) and {h_nli['precision']:.1%} (held-out). "
         "See [README.md#citation-verification-benchmark](../../README.md#citation-verification-benchmark).\n"
@@ -311,7 +308,7 @@ def render_all(check: bool = False) -> bool:
     files_to_write.append((readme_path, readme_content_updated))
 
     # --- EVALUATION.md ---
-    eval_path = ROOT / "EVALUATION.md"
+    eval_path = ROOT / "docs" / "EVALUATION.md"
     eval_content = eval_path.read_text(encoding="utf-8")
 
     eval_v_table = generate_evaluation_verifier_table(v_metrics)
@@ -355,7 +352,7 @@ def render_all(check: bool = False) -> bool:
             ]
             print(f"ERROR: Documentation tables do not match verified measurement artifacts!")
             print(f"Mismatched files: {', '.join(mismatched)}")
-            print("Run `uv run python scripts/render_readme.py` to regenerate tables.")
+            print("Run `uv run python scripts/tooling/render_readme.py` to regenerate tables.")
             return False
         print("OK: All documentation tables match verified measurements.")
         return True

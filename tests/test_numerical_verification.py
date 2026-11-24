@@ -151,7 +151,7 @@ def test_metric_mismatch_is_rejected():
 
 
 def test_audit_section_0_2_probes_are_rejected():
-    from scripts.measure_verifier import build_ledger
+    from scripts.measurements.measure_verifier import build_ledger
     ledger = build_ledger()
     # 1. Entity swap: claiming mobile's rate (1.6%) for desktop
     assert not verify_numerical_grounding("Desktop users converted at just 1.6% last week.", ledger).valid
@@ -162,7 +162,7 @@ def test_audit_section_0_2_probes_are_rejected():
 
 
 def test_correct_answers_remain_fully_accepted():
-    from scripts.measure_verifier import build_ledger
+    from scripts.measurements.measure_verifier import build_ledger
     ledger = build_ledger()
     correct = [
         "Mobile conversion dropped from 2.8% to 1.6% last week.",
@@ -175,7 +175,7 @@ def test_correct_answers_remain_fully_accepted():
 
 
 def test_heldout_adversarial_probes_sets_1_and_2_rejected():
-    from scripts.measure_verifier import (
+    from scripts.measurements.measure_verifier import (
         build_ledger,
         heldout_set1_wrong_claims,
         heldout_set2_wrong_claims,
@@ -187,7 +187,7 @@ def test_heldout_adversarial_probes_sets_1_and_2_rejected():
 
 
 def test_heldout_correct_paraphrases_sets_1_and_2_accepted():
-    from scripts.measure_verifier import (
+    from scripts.measurements.measure_verifier import (
         build_ledger,
         heldout_set1_right_claims,
         heldout_set2_right_claims,
@@ -200,7 +200,7 @@ def test_heldout_correct_paraphrases_sets_1_and_2_accepted():
 
 def test_heldout_set3_post_fix_behavior():
     """Verify post-fix behavior on fresh Set 3 probes (0/15 wrong accepted, 0/15 right rejected)."""
-    from scripts.measure_verifier import (
+    from scripts.measurements.measure_verifier import (
         build_ledger,
         heldout_set3_wrong_claims,
         heldout_set3_right_claims,
@@ -220,7 +220,7 @@ def test_heldout_set3_post_fix_behavior():
 def test_heldout_set4_behavior():
     """Set 4 was written before the AR-15 fix, but the fix was developed against its failures,
     so 0/15 wrong accepted and 0/15 right rejected here is NOT a held-out result (see Set 5)."""
-    from scripts.measure_verifier import (
+    from scripts.measurements.measure_verifier import (
         build_ledger,
         heldout_set4_wrong_claims,
         heldout_set4_right_claims,
@@ -243,7 +243,7 @@ def test_heldout_set5_external_behavior():
     results, update data/verifier_measurements.json via the measurement script and the
     Limitations list in docs/guide/09_RESULTS_AND_LIMITATIONS.md section 3.4 together.
     """
-    from scripts.measure_verifier import (
+    from scripts.measurements.measure_verifier import (
         build_ledger,
         heldout_set5_wrong_claims,
         heldout_set5_right_claims,

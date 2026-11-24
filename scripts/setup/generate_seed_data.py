@@ -6,13 +6,13 @@ registry (data/records.json), and a hand-authored evaluation benchmark
 This is a one-off content generator, not part of the runtime. It exists so
 the corpus and its ground truth are reproducible and so reviewers can see
 exactly how the "domain" (a fictional internal platform team) was authored.
-Run: python scripts/generate_seed_data.py
+Run: python scripts/setup/generate_seed_data.py
 """
 
 import json
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 DOCS_DIR = ROOT / "data" / "documents"
 
 # ---------------------------------------------------------------------------

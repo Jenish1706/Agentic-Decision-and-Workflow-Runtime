@@ -3,7 +3,7 @@ the MCPServer instance directly to Client, instead of spawning a
 subprocess) - this exercises the real discovery/invocation/schema code
 path without subprocess overhead. The subprocess path (mcp_layer/client.py
 launching each server with StdioServerParameters) is exercised by
-scripts/demo_mcp.py, which is the "genuinely a separate process" version of
+scripts/demos/demo_mcp.py, which is the "genuinely a separate process" version of
 the same protocol.
 """
 

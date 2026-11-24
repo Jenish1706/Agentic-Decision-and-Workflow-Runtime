@@ -12,7 +12,7 @@ mid-search and returned nothing at all.
 
 Naming note: these measure efficiency whether or not a budget applied. Two
 explicit caps exist: `AgentRuntime(max_retrievals=...)`, the plain cap used
-by the retrieval-budget experiment (scripts/run_budget_experiment.py), and
+by the retrieval-budget experiment (scripts/experiments/run_budget_experiment.py), and
 `ActionBudget.max_retrievals` (agent/budget.py), used by the adaptive
 budgeting experiment. Without either, retrieval is bounded only by top-k per
 call and max_steps per run.

@@ -43,8 +43,8 @@ Before an answer is returned, deterministic verification gates check every claim
 - **Citation Verification:** Guarded against negation swaps, number contradictions, and semantic opposition using local NLI cross-encoders with offline lexical fallbacks.
 
 <!-- BEGIN_GUIDE00_RESULTS -->
-All measurements are verified and rendered directly by `scripts/render_readme.py`:
-- **Numerical Claim Verification:** Correct answers are accepted at **100.0%** across baseline test suites, while rejecting 100% of entity swaps, metric swaps, and synonym swaps. Random fabricated claims are accepted at 1.7% (33/2,000 trials). Near-miss fabricated values in the plausible range are accepted at higher rates: 6.8% for plausible percentages, 12.4% for percentage-point gaps, and 51.9% for relative changes (2,000 trials each). Development probe sets (Sets 1 & 2, used while building fixes) show 0/20 wrong claims accepted; on Set 3 (written before the fix, pre-fix result), 2/15 wrong claims were accepted (period swaps) and 2/15 correct claims were falsely rejected prior to AR-15, and the fix was then developed against those failures; Set 4 was also written before the fix, but the fix was developed against it, so its 0/15 wrong accepted and 0/15 false rejections measure the target, not generalisation. The only never-tuned number is the external held-out Set 5: 2/15 wrong claims accepted and 1/15 correct claims falsely rejected (listed in [09_RESULTS_AND_LIMITATIONS.md](09_RESULTS_AND_LIMITATIONS.md)). See full breakdown in [README.md#numerical-verification-benchmark](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../../EVALUATION.md).
+All measurements are verified and rendered directly by `scripts/tooling/render_readme.py`:
+- **Numerical Claim Verification:** Correct answers are accepted at **100.0%** across baseline test suites, while rejecting 100% of entity swaps, metric swaps, and synonym swaps. Random fabricated claims are accepted at 1.7% (33/2,000 trials). Near-miss fabricated values in the plausible range are accepted at higher rates: 6.8% for plausible percentages, 12.4% for percentage-point gaps, and 51.9% for relative changes (2,000 trials each). Development probe sets (Sets 1 & 2, used while building fixes) show 0/20 wrong claims accepted; on Set 3 (written before the fix, pre-fix result), 2/15 wrong claims were accepted (period swaps) and 2/15 correct claims were falsely rejected prior to AR-15, and the fix was then developed against those failures; Set 4 was also written before the fix, but the fix was developed against it, so its 0/15 wrong accepted and 0/15 false rejections measure the target, not generalisation. The only never-tuned number is the external held-out Set 5: 2/15 wrong claims accepted and 1/15 correct claims falsely rejected (listed in [09_RESULTS_AND_LIMITATIONS.md](09_RESULTS_AND_LIMITATIONS.md)). See full breakdown in [README.md#numerical-verification-benchmark](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../EVALUATION.md).
 - **Citation Entailment Verification:** In offline lexical fallback mode, precision is 83.3% (benchmark, 6/30 contradictions accepted) and 83.3% (held-out); with local NLI enabled, precision reaches 90.3% (benchmark, 3/30 contradictions accepted) and 100.0% (held-out). See [README.md#citation-verification-benchmark](../../README.md#citation-verification-benchmark).
 - **Deterministic Policy Enforcement:** Tested across four business domains (Credit Underwriting, Enterprise Systems Operations, Multimodal Business Operations, and Product Growth Analytics), the policy engine achieves 0 false autonomous approvals on spoofed records and malicious SQL projections.
 <!-- END_GUIDE00_RESULTS -->
@@ -54,7 +54,7 @@ All measurements are verified and rendered directly by `scripts/render_readme.py
 ## 6. Evaluation Integrity: Contamination Bugs, Retractions, and LLM Measurement Status
 
 - **Memory Contamination Retraction:** An audit revealed that earlier benchmark runs failed to reset short-term memory between evaluation questions, leaking context and inflating multi-turn scores. The harness now mandates deterministic `runtime.reset_session()` between runs, and contaminated scores were retracted.
-- **LLM Measurement Status:** There is currently **no end-to-end LLM measurement** beyond the 5-question smoke run (`data/eval_report.json`). Large-scale live evaluations (`scripts/run_cross_domain_eval.py` and `scripts/run_budget_experiment.py`) require a configured Ollama instance and remain deferred. All reported benchmark figures for verifiers and policies reflect deterministic code measurements over benchmark datasets.
+- **LLM Measurement Status:** There is currently **no end-to-end LLM measurement** beyond the 5-question smoke run (`data/eval_report.json`). Large-scale live evaluations (`scripts/experiments/run_cross_domain_eval.py` and `scripts/experiments/run_budget_experiment.py`) require a configured Ollama instance and remain deferred. All reported benchmark figures for verifiers and policies reflect deterministic code measurements over benchmark datasets.
 
 ---
 
@@ -107,7 +107,7 @@ uv run pytest
 ### Verify Documentation Tables
 Confirm that all documentation tables match live verified code runs:
 ```bash
-uv run python scripts/render_readme.py --check
+uv run python scripts/tooling/render_readme.py --check
 ```
 
 ### Run an Agent Run Interactively

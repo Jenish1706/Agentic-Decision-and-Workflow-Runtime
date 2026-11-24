@@ -163,7 +163,7 @@ with an existing name. It used to overwrite silently - and two domain
 servers both expose `execute_sql`, so connecting both would have sent every
 query to whichever registered last, against the wrong database.
 
-`scripts/demo_mcp.py` exercises the client directly with no agent
+`scripts/demos/demo_mcp.py` exercises the client directly with no agent
 involved, specifically so this protocol path is visible on its own rather
 than only ever seen wrapped inside agent reasoning.
 

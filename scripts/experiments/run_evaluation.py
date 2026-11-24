@@ -1,4 +1,4 @@
-"""Entry point for the evaluation harness: `uv run python scripts/run_evaluation.py`.
+"""Entry point for the evaluation harness: `uv run python scripts/experiments/run_evaluation.py`.
 See agent_runtime/evaluation/run_eval.py for the actual implementation."""
 
 import asyncio

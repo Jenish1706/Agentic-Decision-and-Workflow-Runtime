@@ -6,7 +6,7 @@ Guarantees that hand-edited or hallucinated figures cannot survive.
 
 from pathlib import Path
 import pytest
-from scripts import render_readme
+from scripts.tooling import render_readme
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -19,7 +19,7 @@ def test_readme_and_evaluation_tables_match_measurements():
 def test_render_all_detects_tampered_tables(monkeypatch, tmp_path):
     """Test that any discrepancy between measurements and markdown is caught."""
     fake_readme = tmp_path / "README.md"
-    fake_eval = tmp_path / "EVALUATION.md"
+    fake_eval = tmp_path / "docs" / "EVALUATION.md"
     fake_guide_dir = tmp_path / "docs" / "guide"
     fake_guide_dir.mkdir(parents=True)
     fake_guide09 = fake_guide_dir / "09_RESULTS_AND_LIMITATIONS.md"
@@ -52,7 +52,7 @@ def test_render_all_detects_tampered_tables(monkeypatch, tmp_path):
 
 def test_guide09_rates_match_measurement_json():
     """Fail if guide 09 states a rate that the measurement does not produce."""
-    from scripts import measure_verifier
+    from scripts.measurements import measure_verifier
 
     guide_path = ROOT / "docs" / "guide" / "09_RESULTS_AND_LIMITATIONS.md"
     content = guide_path.read_text(encoding="utf-8")
@@ -76,7 +76,7 @@ def test_guide09_rates_match_measurement_json():
 def test_live_nli_citation_matches_committed_measurement():
     """Assert live NLI citation measurement matches committed artifact when model is available.
     Skips with a clear reason if the NLI model cannot be loaded offline."""
-    from scripts import measure_citations
+    from scripts.measurements import measure_citations
 
     live_metrics = measure_citations.measure(save_artifact=False)
     if live_metrics.get("backend_used") != "nli":

@@ -4,7 +4,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 WALKTHROUGH = ROOT / "docs" / "guide" / "05_CODE_WALKTHROUGH.md"
 
 def main():

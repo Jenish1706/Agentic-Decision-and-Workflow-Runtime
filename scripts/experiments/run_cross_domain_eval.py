@@ -28,7 +28,7 @@ What changed from the earlier version of this script:
       expected-number recall.
 
 Usage:
-    uv run python scripts/run_cross_domain_eval.py [--domain NAME] [--sample N]
+    uv run python scripts/experiments/run_cross_domain_eval.py [--domain NAME] [--sample N]
 """
 
 import argparse

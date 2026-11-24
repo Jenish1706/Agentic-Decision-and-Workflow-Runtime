@@ -34,7 +34,7 @@ The test suite is built on `pytest` and `pytest-asyncio`. It is designed to be *
 | `tests/test_multi_agent.py` | 9 | Multi-agent `Supervisor` | Worker routing, task decomposition, synthesis verification |
 | `tests/test_numerical_verification.py` | 17 | `agent/verification.py` | Section 0.2 probes, entity swaps, metric oppositions, clause attribution |
 | `tests/test_policy.py` | 29 | `agent/policy.py` | Section 0.2 target binding probes, delimiter normalization, fail-closed rules |
-| `tests/test_readme_tables.py` | 2 | `scripts/render_readme.py` | Documentation table synchronization check |
+| `tests/test_readme_tables.py` | 2 | `scripts/tooling/render_readme.py` | Documentation table synchronization check |
 | `tests/test_vector_index.py` | 5 | `rag/vector_index.py` | Top-k similarity search, vector normalization, clipping bounds |
 | `tests/test_verification.py` | 8 | `agent/verification.py` | Citation checking, negation contradiction guards, number contradiction guards |
 
@@ -42,7 +42,7 @@ The test suite is built on `pytest` and `pytest-asyncio`. It is designed to be *
 
 ## 3. Deliberate Omissions (What We Don't Test Here)
 
-1. **Stochastic LLM Token Generation:** Testing live generative endpoints in CI introduces flaky non-deterministic failures, latency, and token costs. Generative quality is benchmarked separately in `scripts/run_evaluation.py`.
+1. **Stochastic LLM Token Generation:** Testing live generative endpoints in CI introduces flaky non-deterministic failures, latency, and token costs. Generative quality is benchmarked separately in `scripts/experiments/run_evaluation.py`.
 2. **External Network Transports:** No live internet connections or remote Hugging Face endpoints are called during testing.
 3. **Live UI / Frontend Elements:** User interfaces belong to Stage B (`BRIEF_B.md`) and are out of scope.
 

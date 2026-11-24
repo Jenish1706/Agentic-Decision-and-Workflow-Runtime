@@ -6,10 +6,10 @@ This document details all verified experimental findings, negative results, thre
 
 ## 1. Verified Results Summary
 
-All result numbers reflect verified code runs rendered via `scripts/render_readme.py` and validated by `scripts/render_readme.py --check`.
+All result numbers reflect verified code runs rendered via `scripts/tooling/render_readme.py` and validated by `scripts/tooling/render_readme.py --check`.
 
 ### 1.1 Numerical Verification Benchmark
-- **Artifact Path:** `scripts/measure_verifier.py`, rendered in [README.md](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../../EVALUATION.md).
+- **Artifact Path:** `scripts/measurements/measure_verifier.py`, rendered in [README.md](../../README.md#numerical-verification-benchmark) and [EVALUATION.md](../EVALUATION.md).
 
 <!-- BEGIN_GUIDE09_VERIFIER -->
 - **Correct-Answer Acceptance:** **100.0%** (3/3 accepted across baseline verified answers).
@@ -36,7 +36,7 @@ All result numbers reflect verified code runs rendered via `scripts/render_readm
 <!-- END_GUIDE09_VERIFIER -->
 
 ### 1.2 Citation Entailment Benchmark
-- **Artifact Path:** `scripts/measure_citations.py`, rendered in [README.md](../../README.md#citation-verification-benchmark).
+- **Artifact Path:** `scripts/measurements/measure_citations.py`, rendered in [README.md](../../README.md#citation-verification-benchmark).
 
 <!-- BEGIN_GUIDE09_CITATION -->
 - **Offline Lexical Fallback Mode:**
@@ -50,12 +50,12 @@ All result numbers reflect verified code runs rendered via `scripts/render_readm
 <!-- END_GUIDE09_CITATION -->
 
 ### 1.3 RAG Retrieval Quality
-- **Artifact Path:** `evaluation/retrieval_metrics.py`, rendered in [EVALUATION.md](../../EVALUATION.md).
+- **Artifact Path:** `evaluation/retrieval_metrics.py`, rendered in [EVALUATION.md](../EVALUATION.md).
 - **Recall@3:** 0.98 (Bi-encoder naive) $\to$ 0.98 (Cross-encoder reranked).
 - **MRR:** 0.92 (Bi-encoder naive) $\to$ 0.93 (Cross-encoder reranked).
 
 ### 1.4 End-to-End LLM Evaluation Status
-There is currently **no end-to-end LLM measurement** beyond the 5-question smoke run (`data/eval_report.json`). Full-scale live LLM evaluation scripts (`scripts/run_cross_domain_eval.py` and `scripts/run_budget_experiment.py`) require an active Ollama instance and local model server; in its absence, these evaluations remain deferred. All reported benchmark figures for verifiers and policies reflect deterministic code measurements over benchmark datasets.
+There is currently **no end-to-end LLM measurement** beyond the 5-question smoke run (`data/eval_report.json`). Full-scale live LLM evaluation scripts (`scripts/experiments/run_cross_domain_eval.py` and `scripts/experiments/run_budget_experiment.py`) require an active Ollama instance and local model server; in its absence, these evaluations remain deferred. All reported benchmark figures for verifiers and policies reflect deterministic code measurements over benchmark datasets.
 
 ---
 
@@ -79,8 +79,8 @@ There is currently **no end-to-end LLM measurement** beyond the 5-question smoke
 - **Pre-Extracted Document Metrics:** The multimodal domain operates over pre-extracted JSON fixtures simulating OCR/VLM output rather than processing raw PDF/TIFF images in-process.
 
 ### 3.2 Internal Validity
-- **Deterministic LLM Fakes in CI:** The automated test suite uses scripted `FakeLLMClient` instances. While this guarantees hermeticity and repeatability, it does not capture stochastic sampling drift of real temperature $> 0$ model inference. Real-model evaluation requires live runs via `scripts/run_evaluation.py`.
-- **No End-to-End LLM Measurement Beyond Smoke Run:** There is currently **no end-to-end LLM measurement** beyond the initial 5-question smoke run (`data/eval_report.json`). Large-scale live LLM evaluations (`scripts/run_cross_domain_eval.py` and `scripts/run_budget_experiment.py`) remain deferred pending a configured Ollama environment. All reported benchmark metrics reflect deterministic verifier and policy evaluations.
+- **Deterministic LLM Fakes in CI:** The automated test suite uses scripted `FakeLLMClient` instances. While this guarantees hermeticity and repeatability, it does not capture stochastic sampling drift of real temperature $> 0$ model inference. Real-model evaluation requires live runs via `scripts/experiments/run_evaluation.py`.
+- **No End-to-End LLM Measurement Beyond Smoke Run:** There is currently **no end-to-end LLM measurement** beyond the initial 5-question smoke run (`data/eval_report.json`). Large-scale live LLM evaluations (`scripts/experiments/run_cross_domain_eval.py` and `scripts/experiments/run_budget_experiment.py`) remain deferred pending a configured Ollama environment. All reported benchmark metrics reflect deterministic verifier and policy evaluations.
 
 ### 3.3 External Validity
 - **Generalization Across Domains:** The runtime was validated across four enterprise domains (credit underwriting, systems operations, document audit, and product analytics). Novel domains with fundamentally different entity models (e.g. graph-based knowledge networks or continuous temporal control) would require custom entity binding logic.
@@ -92,7 +92,7 @@ Sets 1–4 were all used to build or tune the verifier (Set 4 was written before
 - **Accepted (wrong): "Last week, desktop converted at 1.6% compared with 4.0% on mobile."** The entity comes after the value.
 - **Rejected (correct): "Among mobile users, the conversion rate was 2.8% before and 1.6% last week."** "before" is not read as the baseline period.
 
-Each fresh phrasing set finding a few new misses is the expected limit of rule-based checking, not a one-off bug. It is the argument for declared derivations, where the model states which ledger rows and which operation produced a number and the verifier checks that declaration instead of inferring it from prose. The set lives in `heldout_set5_wrong_claims` / `heldout_set5_right_claims` in `scripts/measure_verifier.py` and is pinned by `tests/test_numerical_verification.py::test_heldout_set5_external_behavior`.
+Each fresh phrasing set finding a few new misses is the expected limit of rule-based checking, not a one-off bug. It is the argument for declared derivations, where the model states which ledger rows and which operation produced a number and the verifier checks that declaration instead of inferring it from prose. The set lives in `heldout_set5_wrong_claims` / `heldout_set5_right_claims` in `scripts/measurements/measure_verifier.py` and is pinned by `tests/test_numerical_verification.py::test_heldout_set5_external_behavior`.
 
 ---
 

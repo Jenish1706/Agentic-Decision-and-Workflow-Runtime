@@ -5,7 +5,7 @@ git history), against the same realistic analytics ledger.
 This is the source of the verifier numbers quoted in EVALUATION.md. No LLM is
 involved, so the result is deterministic (fixed random seeds).
 
-Run: uv run python scripts/measure_verifier.py
+Run: uv run python scripts/measurements/measure_verifier.py
 """
 
 import importlib.util
@@ -21,7 +21,7 @@ from agent_runtime.agent.evidence import EvidenceKind, EvidenceLedger, EvidenceS
 
 BASELINE_COMMIT = "b13a25d"
 TRIALS = 2000
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def load_baseline_verifier():
@@ -319,7 +319,7 @@ def heldout_set4_right_claims() -> list[str]:
 
 def heldout_set5_wrong_claims() -> list[str]:
     """External held-out probes (§0.5 Set 5): written after the AR-15/AR-16 fixes by an
-    external reviewer and never used for tuning. Mirrors .audit/repro/verifier_probe_set5.py.
+    external reviewer and never used for tuning.
     Do not fix the verifier against this set; its misses are listed under Limitations."""
     return [
         "Desktop buyers converted at about 1.6% last week.",

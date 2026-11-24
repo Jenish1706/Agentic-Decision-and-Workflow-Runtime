@@ -101,7 +101,7 @@ Evaluated across 60 hand-labelled benchmark pairs and 20 held-out pairs (written
 ## 6. Evaluation Integrity: Retractions & Measurement Status
 
 - **Memory Contamination Retraction:** An audit revealed that earlier benchmark runs failed to reset short-term memory between evaluation questions, leaking context and inflating multi-turn scores. The harness now mandates deterministic `runtime.reset_session()` between runs, and contaminated scores were retracted.
-- **LLM Measurement Status:** There is currently **no end-to-end LLM measurement** beyond the 5-question smoke run (`data/eval_report.json`). Large-scale live evaluations (`scripts/run_cross_domain_eval.py` and `scripts/run_budget_experiment.py`) require a configured Ollama instance and remain deferred. All reported benchmark figures for verifiers and policies reflect deterministic code measurements over benchmark datasets.
+- **LLM Measurement Status:** There is currently **no end-to-end LLM measurement** beyond the 5-question smoke run (`data/eval_report.json`). Large-scale live evaluations (`scripts/experiments/run_cross_domain_eval.py` and `scripts/experiments/run_budget_experiment.py`) require a configured Ollama instance and remain deferred. All reported benchmark figures for verifiers and policies reflect deterministic code measurements over benchmark datasets.
 
 ---
 
@@ -132,7 +132,7 @@ uv sync
 uv run pytest
 
 # Verify documentation consistency
-uv run python scripts/render_readme.py --check
+uv run python scripts/tooling/render_readme.py --check
 ```
 
 ---
@@ -151,6 +151,25 @@ Read the complete documentation in `docs/guide/`:
 - [08_DESIGN_DECISIONS.md](docs/guide/08_DESIGN_DECISIONS.md): ADRs for 10 major architectural choices.
 - [09_RESULTS_AND_LIMITATIONS.md](docs/guide/09_RESULTS_AND_LIMITATIONS.md): Uncertainties, null/negative results, and validity threats.
 - [GLOSSARY.md](docs/guide/GLOSSARY.md): Definitions for all terms and acronyms.
+
+Reference write-ups in `docs/`: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [EVALUATION.md](docs/EVALUATION.md), [MCP.md](docs/MCP.md), [THEORY.md](docs/THEORY.md).
+
+### Project Layout
+
+```text
+src/agent_runtime/   runtime package: agent loop, policy, verification, rag, mcp_layer, multi_agent, llm, evaluation
+domains/             four business domains (manifest, MCP server, policies, benchmark, data) loaded by path
+tests/               offline test suite (scripted fake LLM, no network needed)
+data/                benchmark + committed measurement artifacts (verifier, citations) and seed documents
+docs/                reference docs (ARCHITECTURE, EVALUATION, MCP, THEORY) and docs/guide/ chapters
+scripts/
+  demos/             runnable single-agent, multi-agent and MCP demos
+  experiments/       live-LLM evaluations and experiments (need Ollama)
+  measurements/      deterministic verifier and citation measurements
+  tooling/           doc table rendering, link and walkthrough checks
+  setup/             seed data generation
+api.py               optional FastAPI wrapper
+```
 
 ---
 

@@ -40,7 +40,7 @@ MEASUREMENT FIXES - results from earlier versions are not comparable
       policies.py is used now.
 
 Usage:
-    uv run python scripts/run_product_analytics_experiment.py
+    uv run python scripts/experiments/run_product_analytics_experiment.py
 """
 
 import hashlib

@@ -65,7 +65,7 @@ Each domain contains 8–12 questions with annotated `expected_numbers` and `exp
 1. **Session Memory Reset:** Between independent benchmark questions, the harness must invoke `runtime.reset_session()`. Without this, short-term history leaks into subsequent prompts, contaminating evaluation results.
 2. **Deterministic LLM Drivers in CI:** To make CI builds reliable and independent of external API quotas or GPU availability, the standard test suite uses scripted `FakeLLMClient` instances that replay realistic model outputs.
 3. **Offline Hermeticity:** Model downloads are caught cleanly (`pytest.skip(..., allow_module_level=True)`), and table verification checks compare against committed measurement artifacts when offline (`data/citation_measurements.json`), ensuring tests never fail because of transient network or Hugging Face outages.
-4. **Dynamic Table Rendering:** Results tables in `README.md` and `EVALUATION.md` must be rendered via `scripts/render_readme.py` and validated by `scripts/render_readme.py --check`. No number is entered manually.
+4. **Dynamic Table Rendering:** Results tables in `README.md` and `EVALUATION.md` must be rendered via `scripts/tooling/render_readme.py` and validated by `scripts/tooling/render_readme.py --check`. No number is entered manually.
 
 ---
 

@@ -18,7 +18,7 @@ Conditions: budget = 1, 2, 3, and None (unlimited, i.e. bounded only by
 max_steps - the configuration this project originally shipped). Every
 condition runs the identical benchmark and identical judge.
 
-Run: uv run python scripts/run_budget_experiment.py
+Run: uv run python scripts/experiments/run_budget_experiment.py
 """
 
 import json

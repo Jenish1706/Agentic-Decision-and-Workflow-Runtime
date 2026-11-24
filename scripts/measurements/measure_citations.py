@@ -1,7 +1,7 @@
 """Measures precision and recall of citation support verification on a benchmark
 of 60 supported vs unsupported claim-chunk pairs.
 
-Run: uv run python scripts/measure_citations.py
+Run: uv run python scripts/measurements/measure_citations.py
 """
 
 import json
@@ -480,7 +480,7 @@ def is_nli_available() -> bool:
 
 
 def load_committed_citation_measurements() -> dict | None:
-    artifact_path = Path(__file__).resolve().parent.parent / "data" / "citation_measurements.json"
+    artifact_path = Path(__file__).resolve().parent.parent.parent / "data" / "citation_measurements.json"
     if artifact_path.exists():
         try:
             return json.loads(artifact_path.read_text(encoding="utf-8"))
@@ -506,7 +506,7 @@ def measure(*, save_artifact: bool = True) -> dict:
     }
 
     if save_artifact and nli_active:
-        artifact_path = Path(__file__).resolve().parent.parent / "data" / "citation_measurements.json"
+        artifact_path = Path(__file__).resolve().parent.parent.parent / "data" / "citation_measurements.json"
         try:
             artifact_path.parent.mkdir(parents=True, exist_ok=True)
             artifact_path.write_text(json.dumps(result, indent=2), encoding="utf-8")

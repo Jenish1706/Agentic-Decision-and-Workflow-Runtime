@@ -17,12 +17,12 @@ should be re-measured before being quoted.
 | [Knowledge-base eval](#results-knowledge-base-previous-revision) (single vs multi-agent) | previous revision | **Unreliable - re-run.** Harness never reset conversation memory between questions: each single-agent prompt contained earlier questions and answers; for multi-agent, only the Researcher worker's prompts did. The numerical verifier then accepted about half of fabricated numbers, and unverified last-step answers counted as successes. |
 | [Retrieval budget experiment](#experiment-retrieval-budget--search-efficiency-previous-revision) | previous revision | **Unreliable - re-run.** Same memory leak and verifier. |
 | [Product analytics budgeting experiment](#experiment-product-analytics-budgeting-previous-revision) | previous revision | **Unreliable - re-run.** No memory leak (that harness did reset), but its governance never ran, and its "numerical correctness" was a tautology. |
-| [Verifier measurement](#measurement-numerical-verifier) | this revision | **Reliable.** Deterministic, `scripts/measure_verifier.py`. |
+| [Verifier measurement](#measurement-numerical-verifier) | this revision | **Reliable.** Deterministic, `scripts/measurements/measure_verifier.py`. |
 | [Domain smoke runs](#measurement-real-model-smoke-runs-of-the-domain-runtime) | this revision | Reliable as observations; five questions, single runs - not a benchmark. |
 | [Test suite](#test-suite) | this revision | Reliable. |
 
-To re-measure: `scripts/run_evaluation.py`, `scripts/run_budget_experiment.py`,
-`scripts/run_product_analytics_experiment.py`, `scripts/run_cross_domain_eval.py`.
+To re-measure: `scripts/experiments/run_evaluation.py`, `scripts/experiments/run_budget_experiment.py`,
+`scripts/experiments/run_product_analytics_experiment.py`, `scripts/experiments/run_cross_domain_eval.py`.
 
 ## Benchmark design
 
@@ -93,7 +93,7 @@ judge call as a task *failure* and as *grounded*.)
 > that the evaluation harness leaked conversational short-term memory across benchmark questions,
 > the numerical verifier accepted fabricated figures (50.9%), and unverified last-step answers were
 > counted as successes. These numbers are removed pending a clean re-run.
-> To regenerate clean benchmark results: `uv run python scripts/run_evaluation.py`.
+> To regenerate clean benchmark results: `uv run python scripts/experiments/run_evaluation.py`.
 
 20 queries, `qwen2.5:7b-instruct` via Ollama:
 
@@ -160,7 +160,7 @@ The multi-agent path's `RetrieverWorker` searches exactly once per query, by
 construction, so multi-agent runs under an implicit retrieval budget of 1. If
 a single agent capped at one retrieval performs like the multi-agent path,
 the orchestration story largely collapses into a constraint story.
-`scripts/run_budget_experiment.py` is the falsification attempt.
+`scripts/experiments/run_budget_experiment.py` is the falsification attempt.
 
 ### What "budget" means in this codebase
 
@@ -176,7 +176,7 @@ the orchestration story largely collapses into a constraint story.
 
 > **Notice:** The quality metrics (Task success, Groundedness, Citation correctness, Failure rate) below
 > were affected by the conversational memory leakage across questions and permissive verification.
-> They are removed pending a clean re-run: `uv run python scripts/run_budget_experiment.py`.
+> They are removed pending a clean re-run: `uv run python scripts/experiments/run_budget_experiment.py`.
 
 Single-agent, 20 queries per condition (`data/budget_experiment_report.json`):
 
@@ -220,7 +220,7 @@ corpus requiring multi-document synthesis should punish a cap of 1.
 > quality columns uninformative.
 
 > **Notice:** The quality metrics below were uninformative or tautological (see inspection notes).
-> They are removed pending a clean re-run: `uv run python scripts/run_product_analytics_experiment.py`.
+> They are removed pending a clean re-run: `uv run python scripts/experiments/run_product_analytics_experiment.py`.
 
 12 questions from `domains/product_analytics/benchmark.json`, `qwen2.5:7b-instruct`,
 single run per regime (`data/product_analytics_experiment_report.json`):
@@ -261,7 +261,7 @@ keywords as substrings ("count" inside "account"), which has since been fixed.
 
 ## Measurement: numerical verifier
 
-`uv run python scripts/measure_verifier.py` - deterministic, no LLM. The
+`uv run python scripts/measurements/measure_verifier.py` - deterministic, no LLM. The
 ledger holds 12 daily checkout rows and one A/B test result (rates, a signed
 difference of +1.333 pp, a p-value). The baseline is the verifier at commit
 `b13a25d`, loaded from git history.
@@ -299,7 +299,7 @@ version checks is meaning - see the limitations in `agent/verification.py`.
 
 ## Measurement: citation support verification
 
-`uv run python scripts/measure_citations.py` - deterministic, no LLM. Evaluates
+`uv run python scripts/measurements/measure_citations.py` - deterministic, no LLM. Evaluates
 whether citation verification correctly rejects unsupported claims and citations
 pointing to irrelevant or fabricated context across 60 hand-labelled pairs.
 
